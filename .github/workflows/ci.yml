@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: native/android
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: |
+            native/android/*.gradle
+            native/android/gradle.properties
+            native/android/gradle/wrapper/gradle-wrapper.properties
+            native/android/sfiora/*.gradle
+      - name: Test and assemble
+        run: >-
+          ./gradlew --no-daemon
+          :sfiora:testDebugUnitTest
+          :sfiora:lintRelease
+          :sfiora:assembleRelease
+
+  apple:
+    name: Apple
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Check Swift formatting
+        run: >-
+          xcrun swift-format lint --strict --recursive
+          Package.swift native/ios/Sources tests/ios
+      - name: Test Swift package
+        run: swift test
+      - name: Build release Swift package
+        run: swift build -c release
+      - name: Build for iOS Simulator
+        run: >-
+          xcodebuild -quiet -scheme Sfiora
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Build for iOS device
+        run: >-
+          xcodebuild -quiet -scheme Sfiora
+          -destination 'generic/platform=iOS'
+          CODE_SIGNING_ALLOWED=NO build

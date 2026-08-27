@@ -1,0 +1,137 @@
+{
+  "fixtureVersion": 1,
+  "records": [
+    {
+      "name": "text-utf8-en",
+      "kind": "text",
+      "text": "Sfiora",
+      "languageCode": "en",
+      "encoding": "UTF-8",
+      "identifierHex": "",
+      "expected": {
+        "typeNameFormat": 1,
+        "typeHex": "54",
+        "payloadHex": "02656E5366696F7261",
+        "messageHex": "D101095402656E5366696F7261",
+        "decodedText": "Sfiora",
+        "decodedLanguageCode": "en",
+        "decodedTextEncoding": "UTF-8"
+      }
+    },
+    {
+      "name": "text-utf16-zh",
+      "kind": "text",
+      "text": "标签",
+      "languageCode": "zh",
+      "encoding": "UTF-16",
+      "identifierHex": "",
+      "expected": {
+        "typeNameFormat": 1,
+        "typeHex": "54",
+        "payloadHex": "827A6868077B7E",
+        "messageHex": "D1010754827A6868077B7E",
+        "decodedText": "标签",
+        "decodedLanguageCode": "zh",
+        "decodedTextEncoding": "UTF-16"
+      }
+    },
+    {
+      "name": "uri-https-example",
+      "kind": "uri",
+      "uri": "https://example.com/nfc",
+      "identifierHex": "",
+      "expected": {
+        "typeNameFormat": 1,
+        "typeHex": "55",
+        "payloadHex": "046578616D706C652E636F6D2F6E6663",
+        "messageHex": "D1011055046578616D706C652E636F6D2F6E6663",
+        "decodedUri": "https://example.com/nfc"
+      }
+    },
+    {
+      "name": "uri-longest-prefix",
+      "kind": "uri",
+      "uri": "urn:nfc:ext:example",
+      "identifierHex": "",
+      "expected": {
+        "typeNameFormat": 1,
+        "typeHex": "55",
+        "payloadHex": "236578743A6578616D706C65",
+        "messageHex": "D1010C55236578743A6578616D706C65",
+        "decodedUri": "urn:nfc:ext:example"
+      }
+    },
+    {
+      "name": "uri-utf8-iri",
+      "kind": "uri",
+      "uri": "https://example.com/标签",
+      "identifierHex": "",
+      "expected": {
+        "typeNameFormat": 1,
+        "typeHex": "55",
+        "payloadHex": "046578616D706C652E636F6D2FE6A087E7ADBE",
+        "messageHex": "D1011355046578616D706C652E636F6D2FE6A087E7ADBE",
+        "decodedUri": "https://example.com/标签"
+      }
+    },
+    {
+      "name": "mime-binary-with-identifier",
+      "kind": "mime",
+      "mediaType": "application/octet-stream",
+      "payloadHex": "01020304",
+      "identifierHex": "6D696D65",
+      "expected": {
+        "typeNameFormat": 2,
+        "typeHex": "6170706C69636174696F6E2F6F637465742D73747265616D",
+        "payloadHex": "01020304",
+        "messageHex": "DA1804046170706C69636174696F6E2F6F637465742D73747265616D6D696D6501020304",
+        "mediaType": "application/octet-stream"
+      }
+    },
+    {
+      "name": "external-example",
+      "kind": "external",
+      "domain": "example.org",
+      "externalTypeName": "sample",
+      "payloadHex": "A0B1",
+      "identifierHex": "",
+      "expected": {
+        "typeNameFormat": 4,
+        "typeHex": "6578616D706C652E6F72673A73616D706C65",
+        "payloadHex": "A0B1",
+        "messageHex": "D412026578616D706C652E6F72673A73616D706C65A0B1",
+        "externalType": "example.org:sample"
+      }
+    }
+  ],
+  "messages": [
+    {
+      "name": "text-and-uri",
+      "recordNames": [
+        "text-utf8-en",
+        "uri-https-example"
+      ],
+      "messageHex": "9101095402656E5366696F726151011055046578616D706C652E636F6D2F6E6663"
+    }
+  ],
+  "encodingBoundaries": [
+    {
+      "name": "short-record-maximum-payload",
+      "typeNameFormat": 1,
+      "typeHex": "58",
+      "payloadByteHex": "A5",
+      "payloadLength": 255,
+      "messagePrefixHex": "D101FF58",
+      "messageByteCount": 259
+    },
+    {
+      "name": "long-record-minimum-payload",
+      "typeNameFormat": 1,
+      "typeHex": "58",
+      "payloadByteHex": "A5",
+      "payloadLength": 256,
+      "messagePrefixHex": "C1010000010058",
+      "messageByteCount": 263
+    }
+  ]
+}

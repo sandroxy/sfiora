@@ -1,0 +1,45 @@
+import org.gradle.api.tasks.compile.JavaCompile
+
+plugins {
+    id "com.android.library"
+}
+
+base {
+    archivesName = "sfiora"
+}
+
+android {
+    namespace = "com.sandrox.sfiora"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 21
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        test {
+            resources.srcDir(rootProject.file("../../tests/fixtures"))
+        }
+    }
+}
+
+dependencies {
+    testImplementation "com.google.code.gson:gson:2.11.0"
+    testImplementation "junit:junit:4.13.2"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.addAll(["-Xlint:all", "-Werror"])
+}
