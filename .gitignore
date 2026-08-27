@@ -1,0 +1,70 @@
+# Operating systems
+.DS_Store
+Thumbs.db
+
+# Editors and local workspace state
+.idea/
+.fleet/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+
+# Shared generated output
+artifacts/
+coverage/
+dist/
+tmp/
+
+# Android / Gradle
+.gradle/
+.kotlin/
+**/build/
+**/.cxx/
+**/.externalNativeBuild/
+*.aar
+*.apk
+*.aab
+
+# Apple / Swift / CocoaPods
+.build/
+.swiftpm/
+DerivedData/
+**/xcuserdata/
+*.xcuserstate
+.xcode.env.local
+Pods/
+**/Pods/
+*.dSYM/
+*.framework/
+*.ipa
+*.xcarchive/
+*.xcframework/
+
+# JavaScript / React Native / Expo
+node_modules/
+.expo/
+.parcel-cache/
+.turbo/
+*.tgz
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# UniApp / HBuilderX generated output
+.hbuilderx/
+unpackage/
+**/unpackage/

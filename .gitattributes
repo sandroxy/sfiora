@@ -1,0 +1,22 @@
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.7z binary
+*.aar binary
+*.a binary
+*.gif binary
+*.har binary
+*.ico binary
+*.jar binary
+*.jpeg binary
+*.jpg binary
+*.keystore binary
+*.pdf binary
+*.png binary
+*.p12 binary
+*.so binary
+*.tgz binary
+*.webp binary
+*.zip binary
