@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nfc_reader_scan_title">Ready to Scan</string>
+    <string name="nfc_reader_scan_instruction">Hold an NFC tag near the back of your phone and keep it steady.</string>
+    <string name="nfc_reader_scan_cancel">Cancel</string>
+    <string name="nfc_reader_done">Done</string>
+    <string name="nfc_reader_scan_success">Read complete</string>
+    <string name="nfc_reader_scan_failed">Couldn’t read the tag</string>
+    <string name="nfc_reader_scan_failed_detail">Keep the tag steady and try again.</string>
+    <string name="nfc_reader_scan_timeout_feedback">Scan timed out. Try again.</string>
+    <string name="nfc_reader_scan_tag_lost">The tag moved out of range before reading finished.</string>
+    <string name="nfc_reader_scan_unsupported">This NFC tag does not contain supported information.</string>
+    <string name="nfc_reader_scan_nfc_disabled">Turn on NFC in system settings, then try again.</string>
+    <string name="nfc_reader_scan_nfc_unsupported">This device doesn’t support NFC tag reading.</string>
+    <string name="nfc_reader_write_title">Ready to Scan</string>
+    <string name="nfc_reader_write_instruction">Hold a writable NFC tag near the back of your phone and keep it steady.</string>
+    <string name="nfc_reader_write_success">Write complete</string>
+    <string name="nfc_reader_write_failed">Couldn’t write the tag</string>
+    <string name="nfc_reader_write_failed_detail">Keep the writable tag steady and try again.</string>
+    <string name="nfc_reader_write_timeout_feedback">Write timed out. Try again.</string>
+    <string name="nfc_reader_write_read_only">This NFC tag is read-only.</string>
+    <string name="nfc_reader_write_capacity_exceeded">This NFC tag does not have enough capacity for the message.</string>
+    <string name="nfc_reader_write_unsupported">This tag is not formatted for standard NDEF writing.</string>
+    <string name="nfc_reader_write_verification_failed">The write could not be verified. Keep the tag close and read it before trying again.</string>
+</resources>

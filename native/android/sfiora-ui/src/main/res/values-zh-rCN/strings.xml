@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nfc_reader_scan_title">已准备好扫描</string>
+    <string name="nfc_reader_scan_instruction">将 NFC 标签靠近手机背部，保持不动，直到读取完成。</string>
+    <string name="nfc_reader_scan_cancel">取消</string>
+    <string name="nfc_reader_done">完成</string>
+    <string name="nfc_reader_scan_success">读取成功</string>
+    <string name="nfc_reader_scan_failed">未能读取标签</string>
+    <string name="nfc_reader_scan_failed_detail">请保持标签位置稳定后重试。</string>
+    <string name="nfc_reader_scan_timeout_feedback">扫描超时，请重试</string>
+    <string name="nfc_reader_scan_tag_lost">标签在读取完成前离开了感应区域。</string>
+    <string name="nfc_reader_scan_unsupported">当前 NFC 标签不包含受支持的信息。</string>
+    <string name="nfc_reader_scan_nfc_disabled">请先在系统设置中开启 NFC，然后重试。</string>
+    <string name="nfc_reader_scan_nfc_unsupported">当前设备不支持 NFC 标签读取。</string>
+    <string name="nfc_reader_write_title">已准备好扫描</string>
+    <string name="nfc_reader_write_instruction">将可写 NFC 标签靠近手机背部，保持不动，直到写入完成。</string>
+    <string name="nfc_reader_write_success">写入成功</string>
+    <string name="nfc_reader_write_failed">未能写入标签</string>
+    <string name="nfc_reader_write_failed_detail">请保持可写标签位置稳定后重试。</string>
+    <string name="nfc_reader_write_timeout_feedback">写入超时，请重试</string>
+    <string name="nfc_reader_write_read_only">当前 NFC 标签为只读状态。</string>
+    <string name="nfc_reader_write_capacity_exceeded">当前 NFC 标签没有足够容量写入这些信息。</string>
+    <string name="nfc_reader_write_unsupported">当前标签尚未格式化为可写的标准 NDEF 标签。</string>
+    <string name="nfc_reader_write_verification_failed">写入结果未能完成校验，请保持标签贴近并先读取确认。</string>
+</resources>

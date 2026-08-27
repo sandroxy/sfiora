@@ -5,11 +5,11 @@ plugins {
 }
 
 base {
-    archivesName = "sfiora"
+    archivesName = "sfiora-ui"
 }
 
 android {
-    namespace = "com.sandrox.sfiora"
+    namespace = "com.sandrox.sfiora.ui"
     compileSdk = 36
 
     defaultConfig {
@@ -27,16 +27,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-
-    sourceSets {
-        test {
-            resources.srcDir(rootProject.file("../../tests/fixtures"))
-        }
-    }
 }
 
 dependencies {
-    testImplementation "com.google.code.gson:gson:2.11.0"
+    api project(":sfiora")
     testImplementation "junit:junit:4.13.2"
 }
 

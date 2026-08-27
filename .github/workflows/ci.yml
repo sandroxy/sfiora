@@ -34,12 +34,16 @@ jobs:
             native/android/gradle.properties
             native/android/gradle/wrapper/gradle-wrapper.properties
             native/android/sfiora/*.gradle
+            native/android/sfiora-ui/*.gradle
       - name: Test and assemble
         run: >-
           ./gradlew --no-daemon
           :sfiora:testDebugUnitTest
+          :sfiora-ui:testDebugUnitTest
           :sfiora:lintRelease
+          :sfiora-ui:lintRelease
           :sfiora:assembleRelease
+          :sfiora-ui:assembleRelease
 
   apple:
     name: Apple
@@ -53,16 +57,18 @@ jobs:
           xcrun swift-format lint --strict --recursive
           Package.swift native/ios/Sources tests/ios
       - name: Test Swift package
-        run: swift test
+        run: swift test -Xswiftc -warnings-as-errors
       - name: Build release Swift package
-        run: swift build -c release
+        run: swift build -c release -Xswiftc -warnings-as-errors
       - name: Build for iOS Simulator
         run: >-
           xcodebuild -quiet -scheme Sfiora
           -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO build
+          CODE_SIGNING_ALLOWED=NO
+          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
       - name: Build for iOS device
         run: >-
           xcodebuild -quiet -scheme Sfiora
           -destination 'generic/platform=iOS'
-          CODE_SIGNING_ALLOWED=NO build
+          CODE_SIGNING_ALLOWED=NO
+          SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build

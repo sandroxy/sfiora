@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/nfc_reader_control_highlight">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/nfc_reader_control_surface" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <solid android:color="@android:color/white" />
+            <corners android:radius="24dp" />
+        </shape>
+    </item>
+</ripple>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="nfc_reader_surface">#FFFFFFFF</color>
+    <color name="nfc_reader_on_surface">#FF000000</color>
+    <color name="nfc_reader_on_surface_secondary">#FF000000</color>
+    <color name="nfc_reader_accent">#FF007AFF</color>
+    <color name="nfc_reader_control_surface">#FF007AFF</color>
+    <color name="nfc_reader_control_highlight">#2EFFFFFF</color>
+    <color name="nfc_reader_control_text">#FF7AFFFF</color>
+    <color name="nfc_reader_close_surface">#FFF2F2F2</color>
+    <color name="nfc_reader_close_icon">#FF000000</color>
+    <color name="nfc_reader_phone_fill">#FFDAECFD</color>
+    <color name="nfc_reader_phone_glare">#FFFFFFFF</color>
+    <color name="nfc_reader_success">#FF007AFF</color>
+    <color name="nfc_reader_error">#FFFF3B30</color>
+    <color name="nfc_reader_legacy_navigation_bar">#FF000000</color>
+</resources>

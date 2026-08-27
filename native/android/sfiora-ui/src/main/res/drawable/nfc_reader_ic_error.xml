@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="132dp"
+    android:height="132dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M64,10A54,54 0,1 1,63.999 10"
+        android:strokeColor="@color/nfc_reader_error"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:strokeWidth="5" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M64,39L64,73"
+        android:strokeColor="@color/nfc_reader_error"
+        android:strokeLineCap="round"
+        android:strokeWidth="7" />
+    <path
+        android:fillColor="@color/nfc_reader_error"
+        android:pathData="M64,84A4.5,4.5 0,1 1,63.999 84" />
+</vector>

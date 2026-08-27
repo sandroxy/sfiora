@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "SfioraAndroid"
 include(":sfiora")
+include(":sfiora-ui")

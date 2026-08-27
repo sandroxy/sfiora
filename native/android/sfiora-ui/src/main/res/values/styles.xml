@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="NfcReader_ScanPanel" parent="android:style/Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowCloseOnTouchOutside">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+
+    <style name="NfcReader_ScanPanelAnimation" parent="@android:style/Animation.Dialog">
+        <item name="android:windowEnterAnimation">@anim/nfc_reader_panel_enter</item>
+        <item name="android:windowExitAnimation">@anim/nfc_reader_panel_exit</item>
+    </style>
+</resources>
