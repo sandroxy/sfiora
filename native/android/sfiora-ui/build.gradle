@@ -2,6 +2,8 @@ import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
     id "com.android.library"
+    id "maven-publish"
+    id "signing"
 }
 
 base {
@@ -37,3 +39,9 @@ dependencies {
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(["-Xlint:all", "-Werror"])
 }
+
+rootProject.ext.configureSfioraPublication(
+        project,
+        "Sfiora UI",
+        "Managed NFC operation UI for Sfiora on Android"
+)

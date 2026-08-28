@@ -1,3 +1,127 @@
+import groovy.json.JsonSlurper
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.bundling.Jar
+
 plugins {
     id "com.android.library" version "8.12.3" apply false
+}
+
+def pluginManifestFile = file("../../plugin.json")
+def pluginManifest = new JsonSlurper().parse(pluginManifestFile)
+def androidManifest = pluginManifest.native?.android
+def candidateRepositoryProperty = providers.gradleProperty("sfioraCandidateRepository")
+if (!(pluginManifest.version instanceof String)
+        || !(androidManifest?.group instanceof String)
+        || !(androidManifest?.artifacts instanceof List)) {
+    throw new GradleException("plugin.json has invalid Android release metadata")
+}
+
+ext.sfioraVersion = pluginManifest.version
+ext.sfioraMavenGroup = androidManifest.group
+ext.sfioraPublishedArtifacts = androidManifest.artifacts
+
+ext.configureSfioraPublication = {
+    Project libraryProject,
+    String publicationName,
+    String publicationDescription ->
+    if (!sfioraPublishedArtifacts.contains(libraryProject.name)) {
+        throw new GradleException("${libraryProject.path} is not declared in plugin.json")
+    }
+
+    libraryProject.group = sfioraMavenGroup
+    libraryProject.version = sfioraVersion
+    def legalResourceName = libraryProject.name == "sfiora"
+            ? "SFIORA_LICENSE"
+            : "SFIORA_UI_LICENSE"
+
+    def legalResourcesDirectory = libraryProject.layout.buildDirectory.dir(
+            "generated/sfiora-legal-resources"
+    )
+    def prepareLegalResources = libraryProject.tasks.register(
+            "prepareSfioraLegalResources",
+            Sync
+    ) {
+        from(rootProject.file("../../LICENSE")) {
+            rename { legalResourceName }
+        }
+        into(legalResourcesDirectory.map { it.dir("META-INF") })
+    }
+
+    libraryProject.android {
+        sourceSets {
+            main {
+                resources.srcDir(legalResourcesDirectory)
+            }
+        }
+        publishing {
+            singleVariant("release") {
+                withSourcesJar()
+                withJavadocJar()
+            }
+        }
+    }
+
+    libraryProject.tasks.named("preBuild").configure {
+        dependsOn(prepareLegalResources)
+    }
+    libraryProject.tasks.withType(Jar).configureEach {
+        from(rootProject.file("../../LICENSE")) {
+            into("META-INF")
+            rename { legalResourceName }
+        }
+    }
+
+    libraryProject.afterEvaluate {
+        libraryProject.publishing {
+            publications {
+                release(MavenPublication) {
+                    from(libraryProject.components.release)
+                    artifactId = libraryProject.name
+                    pom {
+                        name = publicationName
+                        description = publicationDescription
+                        url = "https://github.com/sandroxy/sfiora"
+                        licenses {
+                            license {
+                                name = "The Apache License, Version 2.0"
+                                url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+                                distribution = "repo"
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = "sandroxy"
+                                name = "SandroX"
+                                url = "https://github.com/sandroxy"
+                            }
+                        }
+                        scm {
+                            connection = "scm:git:https://github.com/sandroxy/sfiora.git"
+                            developerConnection = "scm:git:ssh://git@github.com/sandroxy/sfiora.git"
+                            url = "https://github.com/sandroxy/sfiora"
+                        }
+                    }
+                }
+            }
+            repositories {
+                maven {
+                    name = "Candidate"
+                    url = candidateRepositoryProperty.isPresent()
+                            ? libraryProject.uri(candidateRepositoryProperty.get())
+                            : rootProject.layout.buildDirectory.dir("candidate-maven")
+                }
+            }
+        }
+
+        def signingKey = System.getenv("SFIORA_SIGNING_KEY")
+        if (signingKey) {
+            libraryProject.signing {
+                useInMemoryPgpKeys(
+                        signingKey,
+                        System.getenv("SFIORA_SIGNING_PASSWORD") ?: ""
+                )
+                sign(libraryProject.publishing.publications.release)
+            }
+        }
+    }
 }
