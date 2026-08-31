@@ -1,0 +1,74 @@
+{
+  "name": "@sandrox/sfiora",
+  "version": "1.0.0",
+  "description": "Contract-first NFC reading and verified NDEF writing for React Native on Android and iOS.",
+  "main": "index.js",
+  "react-native": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "android",
+    "ios",
+    "shared",
+    "src",
+    "contract",
+    "index.js",
+    "index.d.ts",
+    "app.plugin.js",
+    "plugin",
+    "react-native.config.js",
+    "SfioraReactNative.podspec",
+    "sfiora-artifacts.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "codegen": "react-native codegen"
+  },
+  "keywords": [
+    "nfc",
+    "ndef",
+    "react-native",
+    "android",
+    "ios"
+  ],
+  "peerDependencies": {
+    "@expo/config-plugins": ">=8",
+    "react": "*",
+    "react-native": ">=0.76"
+  },
+  "peerDependenciesMeta": {
+    "@expo/config-plugins": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sandroxy/sfiora.git",
+    "directory": "adapters/react-native"
+  },
+  "homepage": "https://github.com/sandroxy/sfiora",
+  "bugs": {
+    "url": "https://github.com/sandroxy/sfiora/issues"
+  },
+  "author": "SandroX",
+  "engines": {
+    "node": ">=18"
+  },
+  "codegenConfig": {
+    "name": "SfioraSpec",
+    "type": "modules",
+    "jsSrcsDir": "src/specs",
+    "android": {
+      "javaPackageName": "com.sandrox.sfiora.reactnative"
+    },
+    "ios": {
+      "modules": {
+        "Sfiora": {
+          "unstableRequiresMainQueueSetup": true
+        }
+      }
+    }
+  },
+  "license": "Apache-2.0"
+}

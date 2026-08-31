@@ -1,0 +1,37 @@
+plugins {
+    id "com.android.application"
+}
+
+def requiredArtifact = { String propertyName ->
+    def path = providers.gradleProperty(propertyName).orNull
+    if (path == null || !file(path).isFile()) {
+        throw new GradleException("Missing artifact property: ${propertyName}")
+    }
+    file(path)
+}
+
+android {
+    namespace = "com.sandrox.sfiora.uniapp.consumer"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.sandrox.sfiora.uniapp.consumer"
+        minSdk = 21
+        targetSdk = 36
+        versionCode = 1
+        versionName = "1.0"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation files(requiredArtifact("sfioraCoreAar"))
+    implementation files(requiredArtifact("sfioraUiAar"))
+    implementation files(requiredArtifact("sfioraBridgeAar"))
+    implementation files(requiredArtifact("sfioraUniAppAar"))
+    compileOnly files(requiredArtifact("dcloudUniAppAar"))
+}

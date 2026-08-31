@@ -13,10 +13,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  contract:
+    name: Bridge contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: "24"
+      - name: Verify bridge contract and wrappers
+        run: node --test tests/js/bridge-wrappers.test.mjs
+      - name: Verify release metadata
+        run: ./scripts/verify-release-metadata.sh
+
   android:
     name: Android
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: native/android
@@ -35,6 +51,8 @@ jobs:
             native/android/gradle/wrapper/gradle-wrapper.properties
             native/android/sfiora/*.gradle
             native/android/sfiora-ui/*.gradle
+            adapters/android/*.gradle
+            adapters/shared/android/*.gradle
             plugin.json
       - name: Test and assemble
         run: >-
@@ -49,11 +67,15 @@ jobs:
         run: >-
           ../../scripts/verify-release-metadata.sh &&
           ../../scripts/verify-native-android.sh
+      - name: Test shared Android bridge
+        run: >-
+          ./gradlew -p ../../adapters/android --no-daemon
+          :bridge-support:testDebugUnitTest
 
   apple:
     name: Apple
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Check out source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
@@ -61,7 +83,11 @@ jobs:
         run: >-
           xcrun swift-format lint --strict --recursive
           Package.swift native/ios/Sources tests/ios
+          adapters/shared/ios/Sources adapters/shared/ios/Tests
       - name: Test Swift package
+        run: swift test -Xswiftc -warnings-as-errors
+      - name: Test shared iOS bridge
+        working-directory: adapters/shared/ios
         run: swift test -Xswiftc -warnings-as-errors
       - name: Build release Swift package
         run: swift build -c release -Xswiftc -warnings-as-errors

@@ -9,7 +9,7 @@ ruby -rjson -e '
     manifest = JSON.parse(File.read(ARGV.fetch(0)))
     root = ARGV.fetch(1)
 
-    expected_root_keys = %w[displayName id license native repository schemaVersion version]
+    expected_root_keys = %w[adapters displayName id license native repository schemaVersion version]
     abort("plugin.json has unexpected root fields") unless
       manifest.keys.sort == expected_root_keys.sort
     abort("plugin.json schemaVersion must be 1") unless manifest["schemaVersion"] == 1
@@ -18,6 +18,27 @@ ruby -rjson -e '
     abort("plugin.json license must be Apache-2.0") unless manifest["license"] == "Apache-2.0"
     abort("plugin.json repository is not canonical") unless
       manifest["repository"] == "https://github.com/sandroxy/sfiora.git"
+
+    adapters = manifest.fetch("adapters")
+    abort("plugin.json has unexpected adapter fields") unless
+      adapters.keys.sort == %w[reactNative uniApp]
+    react_native = adapters.fetch("reactNative")
+    abort("plugin.json has unexpected React Native fields") unless
+      react_native.keys.sort == %w[minimumVersion package]
+    abort("Unexpected React Native package") unless
+      react_native["package"] == "@sandrox/sfiora"
+    abort("React Native minimum must be 0.76") unless
+      react_native["minimumVersion"] == "0.76"
+    uni_app = adapters.fetch("uniApp")
+    abort("plugin.json has unexpected UniApp fields") unless
+      uni_app.keys.sort == %w[id kind minimumHBuilderX module]
+    abort("Unexpected UniApp adapter identity") unless
+      uni_app == {
+        "kind" => "nativeplugin",
+        "id" => "Sandrox-Sfiora",
+        "module" => "Sfiora",
+        "minimumHBuilderX" => "5.24"
+      }
 
     version = manifest.fetch("version")
     abort("Invalid semantic version: #{version}") unless
@@ -38,6 +59,95 @@ ruby -rjson -e '
       ios.keys.sort == %w[minimumVersion module]
     abort("Unexpected iOS module") unless ios["module"] == "Sfiora"
     abort("iOS minimum must be 13.0") unless ios["minimumVersion"] == "13.0"
+
+    react_package = JSON.parse(
+      File.read(File.join(root, "adapters/react-native/package.json"))
+    )
+    abort("React Native package name differs from plugin.json") unless
+      react_package["name"] == react_native["package"]
+    abort("React Native package version differs from plugin.json") unless
+      react_package["version"] == version
+    abort("React Native peer minimum differs from plugin.json") unless
+      react_package.dig("peerDependencies", "react-native") ==
+        ">=#{react_native.fetch("minimumVersion")}"
+    abort("React Native package repository is not canonical") unless
+      react_package.dig("repository", "url") == manifest["repository"]
+    abort("React Native package license differs from plugin.json") unless
+      react_package["license"] == manifest["license"]
+
+    react_gradle = File.read(
+      File.join(root, "adapters/react-native/android/build.gradle")
+    )
+    react_minimum = react_gradle[
+      /minSdk\s*=\s*safeExtGet\("minSdkVersion",\s*([0-9]+)\)/,
+      1
+    ]
+    abort("React Native Android minimum differs from plugin.json") unless
+      react_minimum == android.fetch("minimumSdk").to_s
+
+    react_podspec = File.read(
+      File.join(root, "adapters/react-native/SfioraReactNative.podspec")
+    )
+    react_ios_minimum = react_podspec[
+      /spec\.platform\s*=\s*:ios,\s*"([^"]+)"/,
+      1
+    ]
+    abort("React Native iOS minimum differs from plugin.json") unless
+      react_ios_minimum == ios.fetch("minimumVersion")
+
+    uni_template = JSON.parse(
+      File.read(
+        File.join(root, "adapters/uniapp/packaging/package.template.json")
+      ).gsub("@VERSION@", version)
+    )
+    abort("UniApp package name differs from plugin.json") unless
+      uni_template["name"] == manifest["displayName"]
+    abort("UniApp package id differs from plugin.json") unless
+      uni_template["id"] == uni_app["id"]
+    abort("UniApp package version differs from plugin.json") unless
+      uni_template["version"] == version
+    abort("UniApp package kind differs from plugin.json") unless
+      uni_template["_dp_type"] == uni_app["kind"]
+    uni_native = uni_template.fetch("_dp_nativeplugin")
+    expected_android_module = [{
+      "type" => "module",
+      "name" => uni_app.fetch("module"),
+      "class" => "com.sandrox.sfiora.uniapp.SfioraUniModule"
+    }]
+    expected_ios_module = [{
+      "type" => "module",
+      "name" => uni_app.fetch("module"),
+      "class" => "SfioraUniModule"
+    }]
+    abort("Unexpected UniApp Android module metadata") unless
+      uni_native.dig("android", "plugins") == expected_android_module
+    abort("Unexpected UniApp iOS module metadata") unless
+      uni_native.dig("ios", "plugins") == expected_ios_module
+    abort("UniApp Android minimum differs from plugin.json") unless
+      uni_native.dig("android", "minSdkVersion") ==
+        android.fetch("minimumSdk").to_s
+    abort("UniApp iOS minimum differs from plugin.json") unless
+      uni_native.dig("ios", "deploymentTarget") == ios.fetch("minimumVersion")
+
+    uni_gradle = File.read(File.join(root, "adapters/uniapp/android/build.gradle"))
+    uni_minimum = uni_gradle[
+      /minSdk\s*=\s*safeExtGet\("minSdkVersion",\s*([0-9]+)\)/,
+      1
+    ]
+    abort("UniApp Android build minimum differs from plugin.json") unless
+      uni_minimum == android.fetch("minimumSdk").to_s
+
+    uni_project = File.read(
+      File.join(root, "adapters/uniapp/ios/SfioraUniApp.xcodeproj/project.pbxproj")
+    )
+    uni_marketing_versions =
+      uni_project.scan(/MARKETING_VERSION = ([^;]+);/).flatten.uniq
+    abort("UniApp iOS version differs from plugin.json") unless
+      uni_marketing_versions == [version]
+    uni_deployment_targets =
+      uni_project.scan(/IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);/).flatten.uniq
+    abort("UniApp iOS minimum differs from plugin.json") unless
+      uni_deployment_targets == [ios.fetch("minimumVersion")]
 
     project_path = File.join(root, "native/ios/Sfiora.xcodeproj/project.pbxproj")
     project = File.read(project_path)

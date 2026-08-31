@@ -1,0 +1,47 @@
+require "pathname"
+
+react_native_installation_path = ENV.fetch("SFIORA_REACT_NATIVE_PATH")
+react_native_path = Pathname
+  .new(react_native_installation_path)
+  .realpath
+  .relative_path_from(Pathname.new(__dir__))
+  .to_s
+sfiora_package_path = ENV.fetch("SFIORA_PACKAGE_PATH")
+
+require File.join(react_native_installation_path, "scripts/react_native_pods")
+
+platform :ios, "15.1"
+prepare_react_native_project!
+
+target "SfioraConsumer" do
+  use_react_native!(
+    :path => react_native_path,
+    :app_path => File.expand_path("..", __dir__),
+    :hermes_enabled => false,
+    :fabric_enabled => false,
+    :privacy_file_aggregation_enabled => false
+  )
+
+  pod "SfioraReactNative", :path => sfiora_package_path
+
+  post_install do |installer|
+    # Xcode 26.4+ / Apple Clang 21 workaround for React Native fmt 11.0.2.
+    fmt_base = File.join(installer.sandbox.root, "fmt", "include", "fmt", "base.h")
+    if File.exist?(fmt_base)
+      fmt_source = File.read(fmt_base)
+      old_guard = "#elif defined(__apple_build_version__) && __apple_build_version__ < 14000029L"
+      compatible_guard = "#elif defined(__apple_build_version__)"
+      if fmt_source.include?(old_guard)
+        File.chmod(0644, fmt_base)
+        File.write(fmt_base, fmt_source.sub(old_guard, compatible_guard))
+      elsif !fmt_source.include?(compatible_guard)
+        raise "Unexpected fmt consteval detection; review the Xcode compatibility guard"
+      end
+    end
+    react_native_post_install(
+      installer,
+      react_native_path,
+      :mac_catalyst_enabled => false
+    )
+  end
+end

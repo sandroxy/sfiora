@@ -17,7 +17,12 @@ IFS=$'\t' read -r \
     sfiora_android_group \
     sfiora_android_min_sdk \
     sfiora_ios_module \
-    sfiora_ios_minimum < <(
+    sfiora_ios_minimum \
+    sfiora_react_native_package \
+    sfiora_react_native_minimum \
+    sfiora_uniapp_id \
+    sfiora_uniapp_module \
+    sfiora_uniapp_minimum_hbuilderx < <(
     ruby -rjson -e '
         manifest = JSON.parse(File.read(ARGV.fetch(0)))
         values = [
@@ -26,7 +31,12 @@ IFS=$'\t' read -r \
           manifest.fetch("native").fetch("android").fetch("group"),
           manifest.fetch("native").fetch("android").fetch("minimumSdk"),
           manifest.fetch("native").fetch("ios").fetch("module"),
-          manifest.fetch("native").fetch("ios").fetch("minimumVersion")
+          manifest.fetch("native").fetch("ios").fetch("minimumVersion"),
+          manifest.fetch("adapters").fetch("reactNative").fetch("package"),
+          manifest.fetch("adapters").fetch("reactNative").fetch("minimumVersion"),
+          manifest.fetch("adapters").fetch("uniApp").fetch("id"),
+          manifest.fetch("adapters").fetch("uniApp").fetch("module"),
+          manifest.fetch("adapters").fetch("uniApp").fetch("minimumHBuilderX")
         ]
         abort("plugin.json metadata must not contain tabs or newlines") if
           values.any? { |value| value.to_s.match?(/[\t\r\n]/) }

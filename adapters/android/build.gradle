@@ -1,0 +1,27 @@
+plugins {
+    id "com.android.library" version "8.12.3" apply false
+}
+
+def manifest = new groovy.json.JsonSlurper().parse(file("../../plugin.json"))
+ext.sfioraVersion = manifest.version
+ext.sfioraCoreAar = providers.gradleProperty("sfioraCoreAar").orElse(
+        file("../../dist/native-android/sfiora-${manifest.version}.aar").absolutePath
+)
+ext.sfioraUiAar = providers.gradleProperty("sfioraUiAar").orElse(
+        file("../../dist/native-android/sfiora-ui-${manifest.version}.aar").absolutePath
+)
+
+def requireArtifact = { Provider<String> path, String name ->
+    File artifact = file(path.get())
+    if (!artifact.isFile()) {
+        throw new GradleException("${name} is missing: ${artifact}")
+    }
+    artifact
+}
+
+ext.requireSfioraCoreAar = {
+    requireArtifact(sfioraCoreAar, "Sfiora Android core candidate")
+}
+ext.requireSfioraUiAar = {
+    requireArtifact(sfioraUiAar, "Sfiora Android UI candidate")
+}

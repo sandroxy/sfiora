@@ -1,0 +1,40 @@
+pluginManagement {
+    def reactNativeGradlePluginPath = providers
+            .gradleProperty("sfioraReactNativeGradlePluginPath")
+            .orNull
+    if (reactNativeGradlePluginPath != null) {
+        includeBuild(file(reactNativeGradlePluginPath))
+    }
+    repositories {
+        google {
+            content {
+                includeGroupByRegex("com\\.android.*")
+                includeGroupByRegex("com\\.google.*")
+                includeGroupByRegex("androidx.*")
+            }
+        }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = "SfioraAdaptersAndroid"
+include(":bridge-support")
+project(":bridge-support").projectDir = file("../shared/android")
+if (providers.gradleProperty("includeUniAppAdapter").orNull == "true") {
+    include(":uniapp")
+    project(":uniapp").projectDir = file("../uniapp/android")
+}
+
+if (providers.gradleProperty("includeReactNativeAdapter").orNull == "true") {
+    include(":react-native")
+    project(":react-native").projectDir = file("../react-native/android")
+}

@@ -5,6 +5,18 @@
   "version": "1.0.0",
   "license": "Apache-2.0",
   "repository": "https://github.com/sandroxy/sfiora.git",
+  "adapters": {
+    "reactNative": {
+      "package": "@sandrox/sfiora",
+      "minimumVersion": "0.76"
+    },
+    "uniApp": {
+      "kind": "nativeplugin",
+      "id": "Sandrox-Sfiora",
+      "module": "Sfiora",
+      "minimumHBuilderX": "5.24"
+    }
+  },
   "native": {
     "android": {
       "group": "io.github.sandroxy",

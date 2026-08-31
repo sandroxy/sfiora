@@ -1,0 +1,118 @@
+plugins {
+    id "com.android.library"
+    id "com.facebook.react" apply false
+}
+
+def isNewArchitectureEnabled() {
+    project.hasProperty("newArchEnabled")
+            && project.property("newArchEnabled").toString() == "true"
+}
+
+if (isNewArchitectureEnabled()) {
+    apply plugin: "com.facebook.react"
+}
+
+def safeExtGet(String name, Object fallback) {
+    rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+def packageRoot = file("..")
+def reactNativeVersion = providers
+        .gradleProperty("sfioraReactNativeVersion")
+        .orNull ?: "+"
+def coreAar = providers.gradleProperty("sfioraCoreAar").orElse(
+        file("libs/sfiora.aar").absolutePath
+)
+def uiAar = providers.gradleProperty("sfioraUiAar").orElse(
+        file("libs/sfiora-ui.aar").absolutePath
+)
+def bridgeAar = providers.gradleProperty("sfioraBridgeAar").orElse(
+        file("libs/sfiora-bridge-support.aar").absolutePath
+)
+
+android {
+    namespace = "com.sandrox.sfiora.reactnative"
+    compileSdk = safeExtGet("compileSdkVersion", 36)
+
+    defaultConfig {
+        minSdk = safeExtGet("minSdkVersion", 21)
+        targetSdk = safeExtGet("targetSdkVersion", 36)
+        consumerProguardFiles("consumer-rules.pro")
+        buildConfigField(
+                "boolean",
+                "IS_NEW_ARCHITECTURE_ENABLED",
+                isNewArchitectureEnabled().toString()
+        )
+    }
+
+    buildFeatures {
+        buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    sourceSets {
+        main {
+            manifest.srcFile("src/main/AndroidManifest.xml")
+            java.srcDirs = [
+                    "src/main/java",
+                    isNewArchitectureEnabled()
+                            ? "src/newarch/java"
+                            : "src/legacy/java"
+            ]
+        }
+    }
+}
+
+dependencies {
+    implementation "com.facebook.react:react-android:${reactNativeVersion}"
+    implementation files(coreAar)
+    implementation files(uiAar)
+    implementation files(bridgeAar)
+}
+
+if (isNewArchitectureEnabled()) {
+    def configuredReactNativePath = providers
+            .gradleProperty("sfioraReactNativePath")
+            .orNull
+    if (configuredReactNativePath != null) {
+        def reactNativeDirectory = file(configuredReactNativePath)
+        def configuredCodegenPath = providers
+                .gradleProperty("sfioraReactNativeCodegenPath")
+                .orNull
+        def privateReact = rootProject.extensions.getByName("privateReact")
+        privateReact.root.set(packageRoot)
+        privateReact.reactNativeDir.set(reactNativeDirectory)
+        privateReact.codegenDir.set(
+                configuredCodegenPath == null
+                        ? reactNativeDirectory.toPath()
+                                .resolve("../@react-native/codegen")
+                                .normalize()
+                                .toFile()
+                        : file(configuredCodegenPath)
+        )
+    }
+
+    react {
+        root.set(packageRoot)
+        jsRootDir.set(file("../src/specs"))
+        libraryName.set("SfioraSpec")
+        codegenJavaPackageName.set("com.sandrox.sfiora.reactnative")
+    }
+
+    tasks.named("generateCodegenSchemaFromJavaScript").configure {
+        jsRootDir.set(file("../src/specs"))
+    }
+    tasks.named("generateCodegenArtifactsFromSchema").configure {
+        packageJsonFile.set(file("../package.json"))
+    }
+}

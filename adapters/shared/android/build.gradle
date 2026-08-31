@@ -1,0 +1,49 @@
+import org.gradle.api.tasks.compile.JavaCompile
+
+plugins {
+    id "com.android.library"
+}
+
+base {
+    archivesName = "sfiora-bridge-support"
+}
+
+android {
+    namespace = "com.sandrox.sfiora.bridge"
+    compileSdk = 36
+
+    defaultConfig {
+        minSdk = 21
+        consumerProguardFiles("consumer-rules.pro")
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    sourceSets {
+        test {
+            resources.srcDir(rootProject.file("../../tests/fixtures"))
+        }
+    }
+}
+
+dependencies {
+    compileOnly files(rootProject.ext.requireSfioraCoreAar())
+    compileOnly files(rootProject.ext.requireSfioraUiAar())
+    testImplementation files(rootProject.ext.requireSfioraCoreAar())
+    testImplementation files(rootProject.ext.requireSfioraUiAar())
+    testImplementation "com.google.code.gson:gson:2.11.0"
+    testImplementation "junit:junit:4.13.2"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.addAll(["-Xlint:all", "-Werror"])
+}

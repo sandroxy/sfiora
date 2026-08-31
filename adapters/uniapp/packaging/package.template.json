@@ -1,0 +1,48 @@
+{
+  "name": "Sfiora",
+  "id": "Sandrox-Sfiora",
+  "version": "@VERSION@",
+  "description": "Contract-first NFC reading and verified NDEF writing for UniApp on Android and iOS.",
+  "_dp_type": "nativeplugin",
+  "_dp_nativeplugin": {
+    "android": {
+      "plugins": [
+        {
+          "type": "module",
+          "name": "Sfiora",
+          "class": "com.sandrox.sfiora.uniapp.SfioraUniModule"
+        }
+      ],
+      "integrateType": "aar",
+      "dependencies": [],
+      "compileOptions": {
+        "sourceCompatibility": "1.8",
+        "targetCompatibility": "1.8"
+      },
+      "minSdkVersion": "21"
+    },
+    "ios": {
+      "plugins": [
+        {
+          "type": "module",
+          "name": "Sfiora",
+          "class": "SfioraUniModule"
+        }
+      ],
+      "integrateType": "framework",
+      "deploymentTarget": "13.0",
+      "frameworks": [
+        "SfioraUniApp.framework",
+        "Sfiora.framework",
+        "CoreNFC.framework"
+      ],
+      "embedFrameworks": [
+        "Sfiora.framework"
+      ],
+      "resources": [],
+      "validArchitectures": [
+        "arm64"
+      ]
+    }
+  }
+}

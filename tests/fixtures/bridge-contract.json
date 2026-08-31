@@ -1,0 +1,147 @@
+{
+  "fixtureVersion": 1,
+  "ndefRecords": [
+    {
+      "name": "uri-https-baidu",
+      "tnf": 1,
+      "typeHex": "55",
+      "idHex": "",
+      "payloadHex": "046D2E62616964752E636F6D",
+      "messageHex": "D1010C55046D2E62616964752E636F6D",
+      "expected": {
+        "uri": "https://m.baidu.com"
+      }
+    },
+    {
+      "name": "text-utf8-zh",
+      "tnf": 1,
+      "typeHex": "54",
+      "idHex": "",
+      "payloadHex": "027A68E6A087E7ADBE",
+      "messageHex": "D1010954027A68E6A087E7ADBE",
+      "expected": {
+        "text": "标签",
+        "languageCode": "zh",
+        "textEncoding": "UTF-8"
+      }
+    },
+    {
+      "name": "text-utf16-big-endian-zh",
+      "tnf": 1,
+      "typeHex": "54",
+      "idHex": "",
+      "payloadHex": "827A6868077B7E",
+      "messageHex": "D1010754827A6868077B7E",
+      "expected": {
+        "text": "标签",
+        "languageCode": "zh",
+        "textEncoding": "UTF-16"
+      }
+    }
+  ],
+  "ndefEncodingBoundaries": [
+    {
+      "name": "short-record-maximum-payload",
+      "tnf": 1,
+      "typeHex": "58",
+      "payloadByteHex": "A5",
+      "payloadLength": 255,
+      "expectedHeaderHex": "D101FF58",
+      "expectedMessageByteCount": 259,
+      "shortRecord": true
+    },
+    {
+      "name": "long-record-minimum-payload",
+      "tnf": 1,
+      "typeHex": "58",
+      "payloadByteHex": "A5",
+      "payloadLength": 256,
+      "expectedHeaderHex": "C1010000010058",
+      "expectedMessageByteCount": 263,
+      "shortRecord": false
+    }
+  ],
+  "bridgeWriteRequest": {
+    "initializationMarker": {
+      "domain": "io.sfiora",
+      "type": "credential"
+    },
+    "message": {
+      "records": [
+        {
+          "kind": "text",
+          "text": "Bridge NFC",
+          "languageCode": "en",
+          "encoding": "UTF-8",
+          "identifierBase64": "dGV4dA=="
+        },
+        {
+          "kind": "uri",
+          "uri": "https://example.com/nfc"
+        },
+        {
+          "kind": "mime",
+          "mediaType": "application/octet-stream",
+          "payloadBase64": "AQIDBA==",
+          "identifierBase64": "bWltZQ=="
+        },
+        {
+          "kind": "external",
+          "domain": "io.sfiora",
+          "type": "credential",
+          "payloadBase64": "eyJpZCI6MX0="
+        }
+      ]
+    },
+    "options": {
+      "timeoutMilliseconds": 12000
+    },
+    "expected": {
+      "recordCount": 4,
+      "byteCount": 109,
+      "messageHex": "99010D04547465787402656E427269646765204E464311011055046578616D706C652E636F6D2F6E66631A1804046170706C69636174696F6E2F6F637465742D73747265616D6D696D6501020304541408696F2E7366696F72613A63726564656E7469616C7B226964223A317D",
+      "messageBase64": "mQENBFR0ZXh0AmVuQnJpZGdlIE5GQxEBEFUEZXhhbXBsZS5jb20vbmZjGhgEBGFwcGxpY2F0aW9uL29jdGV0LXN0cmVhbW1pbWUBAgMEVBQIaW8uc2Zpb3JhOmNyZWRlbnRpYWx7ImlkIjoxfQ=="
+    }
+  },
+  "bridgeSnapshot": {
+    "schemaVersion": 1,
+    "platform": "ios",
+    "discoveredAtEpochMs": 0,
+    "id": {
+      "hex": "",
+      "base64": "",
+      "length": 0
+    },
+    "technologies": [
+      "ndef"
+    ],
+    "nativeTechnologies": [],
+    "platformDetails": {
+      "ios": {
+        "source": "contract-fixture"
+      }
+    },
+    "ndef": {
+      "status": "read",
+      "messageHex": "D1010C55046D2E62616964752E636F6D",
+      "messageBase64": "0QEMVQRtLmJhaWR1LmNvbQ==",
+      "recordCount": 1,
+      "records": [
+        {
+          "index": 0,
+          "tnf": 1,
+          "tnfName": "wellKnown",
+          "typeHex": "55",
+          "typeBase64": "VQ==",
+          "idHex": "",
+          "idBase64": "",
+          "payloadHex": "046D2E62616964752E636F6D",
+          "payloadBase64": "BG0uYmFpZHUuY29t",
+          "typeAscii": "U",
+          "uri": "https://m.baidu.com"
+        }
+      ]
+    },
+    "warnings": []
+  }
+}
