@@ -100,6 +100,30 @@ sfiora_verify_checksum() {
     fi
 }
 
+sfiora_assert_version_unpublished() {
+    if git -C "${sfiora_root}" show-ref --verify --quiet "refs/tags/${sfiora_version}"; then
+        echo "Sfiora ${sfiora_version} already has a local tag and cannot be rebuilt." >&2
+        exit 1
+    fi
+
+    local remote_output
+    local remote_status
+    set +e
+    remote_output="$(git -C "${sfiora_root}" ls-remote --tags --refs origin \
+        "refs/tags/${sfiora_version}" 2>&1)"
+    remote_status=$?
+    set -e
+    if [[ ${remote_status} -ne 0 ]]; then
+        echo "Unable to confirm that Sfiora ${sfiora_version} is unpublished on origin:" >&2
+        printf '%s\n' "${remote_output}" >&2
+        exit 1
+    fi
+    if [[ -n "${remote_output}" ]]; then
+        echo "Sfiora ${sfiora_version} already exists on origin and cannot be rebuilt." >&2
+        exit 1
+    fi
+}
+
 sfiora_cleanup_temporary_directory() {
     local directory_path="$1"
     local temporary_root="${TMPDIR:-/tmp}"

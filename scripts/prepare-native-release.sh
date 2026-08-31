@@ -19,6 +19,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 initial_commit="$(git -C "${sfiora_root}" rev-parse HEAD)"
 
+sfiora_assert_version_unpublished
+
 if [[ ${allow_dirty} -eq 0 ]] \
     && [[ -n "$(git -C "${sfiora_root}" status --porcelain)" ]]; then
     echo "Release preparation requires a clean worktree." >&2

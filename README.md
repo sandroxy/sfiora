@@ -4,6 +4,11 @@ Sfiora is a contract-first NFC reader and writer for Android, iOS, React
 Native, and classic UniApp. Every adapter uses the same native Android and iOS
 cores and the same structured bridge contract.
 
+Sfiora 1.0.0 is currently an unpublished release target. The coordinates below
+are the intended public coordinates, not a claim that a stable package already
+exists. Maintainers should follow [RELEASING.md](RELEASING.md); consumers should
+wait for an immutable public Release.
+
 ## Capabilities
 
 - Foreground tag discovery and NDEF reading
@@ -58,6 +63,11 @@ errors and shared TypeScript definitions.
 ## Security
 
 Report vulnerabilities according to the [security policy](SECURITY.md).
+
+## Maintainers
+
+Build, candidate, artifact-consumer acceptance, and exact-byte publication are
+documented in [RELEASING.md](RELEASING.md).
 
 ## License
 
