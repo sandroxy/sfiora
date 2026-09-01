@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 
-ruby -rjson -e '
+ruby -rjson -rdigest -e '
     manifest = JSON.parse(File.read(ARGV.fetch(0)))
     root = ARGV.fetch(1)
 
@@ -56,7 +56,9 @@ ruby -rjson -e '
 
     ios = native.fetch("ios")
     abort("plugin.json has unexpected iOS fields") unless
-      ios.keys.sort == %w[minimumVersion module]
+      ios.keys.sort == %w[distribution minimumVersion module]
+    abort("iOS distribution must be a binary Swift Package") unless
+      ios["distribution"] == "binarySwiftPackage"
     abort("Unexpected iOS module") unless ios["module"] == "Sfiora"
     abort("iOS minimum must be 13.0") unless ios["minimumVersion"] == "13.0"
 
@@ -161,7 +163,7 @@ ruby -rjson -e '
     project_names = project.scan(
       /isa = PBXFileReference;[^\n]*lastKnownFileType = sourcecode\.swift; path = ([^;]+\.swift);/
     ).flatten.sort
-    abort("Sfiora.xcodeproj source list differs from the Swift Package source directory") unless
+    abort("Sfiora.xcodeproj source list differs from the canonical iOS source directory") unless
       project_names == source_names
 
     marketing_versions = project.scan(/MARKETING_VERSION = ([^;]+);/).flatten.uniq
@@ -182,12 +184,31 @@ ruby -rjson -e '
     end
 
     package_swift = File.read(File.join(root, "Package.swift"))
-    abort("Package.swift must expose the Sfiora source target") unless
+    abort("Package.swift must expose the Sfiora binary target") unless
+      package_swift.include?(%q{.binaryTarget(}) &&
       package_swift.include?(%q{name: "Sfiora"}) &&
-      package_swift.include?(%q{path: "native/ios/Sources/Sfiora"})
+      !package_swift.include?(%q{path: "native/ios/Sources/Sfiora"})
     expected_platform = ".iOS(.v#{ios.fetch("minimumVersion").split(".").first})"
     abort("Package.swift minimum iOS differs from plugin.json") unless
       package_swift.include?(expected_platform)
+    package_version = package_swift[/let sfioraVersion = "([^"]+)"/, 1]
+    abort("Package.swift version differs from plugin.json") unless package_version == version
+    abort("Package.swift release base URL is invalid") unless package_swift.include?(
+      %q{let sfioraReleaseBaseURL =} + "\n" +
+        %q{    "https://github.com/sandroxy/sfiora/releases/download/\(sfioraVersion)"}
+    )
+    abort("Package.swift binary URL is invalid") unless package_swift.include?(
+      %q{let sfioraBinaryURL = "\(sfioraReleaseBaseURL)/sfiora-\(sfioraVersion).xcframework.zip"}
+    ) && package_swift.include?(%q{url: sfioraBinaryURL})
+    binary_checksum = package_swift[/let sfioraBinaryChecksum =\s*"([0-9a-f]+)"/, 1]
+    abort("Package.swift binary checksum is invalid") unless
+      binary_checksum&.match?(/\A[0-9a-f]{64}\z/) &&
+        package_swift.include?(%q{checksum: sfioraBinaryChecksum})
+    ios_artifact = File.join(root, "dist/native-ios/sfiora-#{version}.xcframework.zip")
+    if File.file?(ios_artifact)
+      abort("Package.swift checksum differs from the local iOS artifact") unless
+        Digest::SHA256.file(ios_artifact).hexdigest == binary_checksum
+    end
 
     release_files = [
       File.join(root, "plugin.json"),

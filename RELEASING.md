@@ -26,18 +26,44 @@ same still-unpublished product version and obtain a different id.
 ## Build and snapshot
 
 Start from a clean commit whose `plugin.json` version has no local or `origin`
-tag. Formal Android output requires `SFIORA_SIGNING_KEY`.
+tag. Formal Android output requires `SFIORA_SIGNING_KEY`. The public Swift
+Package is binary, so iOS uses a two-commit handoff: build the XCFramework once
+from the clean source commit, then record those exact bytes in `Package.swift`.
 
 ```sh
-./scripts/prepare-native-release.sh
+export SFIORA_IOS_SOURCE_COMMIT="$(git rev-parse HEAD)"
+./scripts/package-native-ios.sh
+export SFIORA_IOS_ARCHIVE="$(pwd)/dist/native-ios/sfiora-<version>.xcframework.zip"
+export SFIORA_IOS_SHA256="$(swift package compute-checksum "${SFIORA_IOS_ARCHIVE}")"
+```
+
+Update the binary target URL and checksum in `Package.swift`, run the metadata
+checks, and commit that release metadata without changing `native/ios` or
+the other binary inputs (`LICENSE`, `plugin.json`, `package-native-ios.sh`, or
+`release-common.sh`). Then promote the already-built archive while preparing
+the complete native release:
+
+```sh
+SFIORA_IOS_ACCEPTED_XCFRAMEWORK_ZIP="${SFIORA_IOS_ARCHIVE}" \
+SFIORA_IOS_ACCEPTED_XCFRAMEWORK_SHA256="${SFIORA_IOS_SHA256}" \
+SFIORA_IOS_ACCEPTED_SOURCE_COMMIT="${SFIORA_IOS_SOURCE_COMMIT}" \
+  ./scripts/prepare-native-release.sh
 ./scripts/package-react-native.sh
 ./scripts/package-uniapp.sh
 ./scripts/prepare-release-candidate.sh
 ```
 
 The last command prints the absolute `candidate.json` path. It validates the
-native manifest, checksum sidecars, adapter identities, and embedded-native
-provenance before copying the complete set into `dist/candidates`.
+native manifest, checksum sidecars, adapter identities, embedded-native
+provenance, and the unchanged iOS source lineage before copying the complete
+set into `dist/candidates`. A locally rebuilt iOS archive that was not promoted
+with all three accepted-binary values can only produce a rehearsal.
+
+[`release-policy.json`](release-policy.json) is Sfiora's machine-readable
+release contract. Candidate creation and the publication gate require an exact
+match for the product id, source repository, qualification fields, artifact
+roles, and automated/manual acceptance matrix. It contains no sibling-product
+catalog; every plugin owns its own independent policy.
 
 For pipeline work only, `--allow-dirty` and `--allow-unsigned` produce a
 `rehearsal`. The state is derived from the actual source and signing evidence;
@@ -45,22 +71,37 @@ the flags do not make an ineligible build acceptable.
 
 ## Consumer acceptance
 
-In a clean checkout of `integrated-plugins`, pass the manifest explicitly:
+In a clean checkout of `integrated-plugins`, execute every automated target
+declared by the candidate. Each command writes immutable evidence bound to the
+candidate manifest and verifier commit:
+
+Every candidate-declared target runs in a Sfiora-only consumer. Shared React
+Native and classic UniApp catalog sources are used to generate ignored isolated
+hosts, so another plugin's version or availability cannot influence a Sfiora receipt.
+The combined-showcase smoke is stable-only and never participates in Sfiora
+publication acceptance.
 
 ```sh
-./verification/sfiora/verify.sh \
+./verification/run-acceptance.rb \
   --candidate /absolute/path/to/candidate.json \
-  all
+  --target android
+# Repeat for ios, react-native-android, react-native-ios, and uniapp.
 ```
 
-Complete the documented NFC device matrix against the same staged files. When
-automated and manual checks have both passed, record the immutable receipt:
+Complete every declared NFC device target against the same staged files. Then
+record each manual result by target; omitted targets remain `pending`, and a
+receipt becomes `accepted` only when every declared automated and manual target
+is `passed`:
 
 ```sh
 ./verification/record-acceptance.rb \
   --candidate /absolute/path/to/candidate.json \
-  --automated passed \
-  --manual passed
+  --manual native-android-nfc-device=passed \
+  --manual native-ios-nfc-device=passed \
+  --manual react-native-android-nfc-device=passed \
+  --manual react-native-ios-nfc-device=passed \
+  --manual uniapp-android-nfc-device=passed \
+  --manual uniapp-ios-nfc-device=passed
 ```
 
 Commit the receipt in `integrated-plugins`. A `pending` receipt may document

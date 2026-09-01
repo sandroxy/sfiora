@@ -44,8 +44,10 @@ panels while keeping NFC behavior in the headless core artifact.
 
 ### iOS
 
-Add this repository as a Swift Package dependency and link the `Sfiora`
-product. The host application must provide `NFCReaderUsageDescription` and
+Add this repository as a Swift Package dependency and link the binary `Sfiora`
+product. Each release tag resolves the checksum-pinned XCFramework attached to
+that same GitHub Release; consumers do not compile Sfiora's canonical source
+target. The host application must provide `NFCReaderUsageDescription` and
 enable the Near Field Communication Tag Reading capability with both `NDEF`
 and `TAG` reader-session formats. FeliCa polling also requires the concrete
 system codes used by the host application.

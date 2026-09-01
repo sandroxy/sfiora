@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 
-for command_name in plutil xattr xcodebuild zip; do
+for command_name in git plutil shasum xattr xcodebuild zip; do
     sfiora_require_command "${command_name}"
 done
 
@@ -14,6 +14,81 @@ project_path="${ios_dir}/Sfiora.xcodeproj"
 artifact_dir="${sfiora_root}/dist/native-ios"
 artifact_name="sfiora-${sfiora_version}.xcframework.zip"
 artifact_path="${artifact_dir}/${artifact_name}"
+accepted_archive="${SFIORA_IOS_ACCEPTED_XCFRAMEWORK_ZIP:-}"
+accepted_sha256="${SFIORA_IOS_ACCEPTED_XCFRAMEWORK_SHA256:-}"
+accepted_source_commit="${SFIORA_IOS_ACCEPTED_SOURCE_COMMIT:-}"
+ios_binary_inputs=(
+    LICENSE
+    plugin.json
+    native/ios
+    scripts/package-native-ios.sh
+    scripts/release-common.sh
+)
+
+accepted_value_count=0
+for accepted_value in "${accepted_archive}" "${accepted_sha256}" "${accepted_source_commit}"; do
+    if [[ -n "${accepted_value}" ]]; then
+        accepted_value_count=$((accepted_value_count + 1))
+    fi
+done
+if [[ ${accepted_value_count} -ne 0 && ${accepted_value_count} -ne 3 ]]; then
+    echo "SFIORA_IOS_ACCEPTED_XCFRAMEWORK_ZIP, SFIORA_IOS_ACCEPTED_XCFRAMEWORK_SHA256," >&2
+    echo "and SFIORA_IOS_ACCEPTED_SOURCE_COMMIT must be supplied together." >&2
+    exit 1
+fi
+
+if [[ ${accepted_value_count} -eq 3 ]]; then
+    if [[ "${accepted_archive}" != /* || ! -f "${accepted_archive}" ]]; then
+        echo "Accepted Sfiora XCFramework must be an existing absolute file path." >&2
+        exit 1
+    fi
+    if [[ ! "${accepted_sha256}" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "SFIORA_IOS_ACCEPTED_XCFRAMEWORK_SHA256 must be a lowercase SHA-256." >&2
+        exit 1
+    fi
+    if [[ ! "${accepted_source_commit}" =~ ^[0-9a-f]{40}$ ]] \
+        || ! git -C "${sfiora_root}" cat-file -e "${accepted_source_commit}^{commit}" 2>/dev/null; then
+        echo "SFIORA_IOS_ACCEPTED_SOURCE_COMMIT must identify a local source commit." >&2
+        exit 1
+    fi
+    if ! git -C "${sfiora_root}" merge-base --is-ancestor \
+        "${accepted_source_commit}" HEAD; then
+        echo "Accepted iOS source commit is not an ancestor of the current release commit." >&2
+        exit 1
+    fi
+    if ! git -C "${sfiora_root}" diff --quiet \
+        "${accepted_source_commit}" HEAD -- "${ios_binary_inputs[@]}" \
+        || ! git -C "${sfiora_root}" diff --quiet -- "${ios_binary_inputs[@]}" \
+        || ! git -C "${sfiora_root}" diff --cached --quiet -- "${ios_binary_inputs[@]}"; then
+        echo "Sfiora native iOS inputs changed after the accepted binary was built." >&2
+        exit 1
+    fi
+    actual_sha256="$(sfiora_sha256 "${accepted_archive}")"
+    if [[ "${actual_sha256}" != "${accepted_sha256}" ]]; then
+        echo "Accepted Sfiora XCFramework checksum differs." >&2
+        echo "Expected: ${accepted_sha256}" >&2
+        echo "Actual:   ${actual_sha256}" >&2
+        exit 1
+    fi
+
+    mkdir -p "${artifact_dir}"
+    accepted_absolute="$(cd "$(dirname "${accepted_archive}")" && pwd -P)/$(basename "${accepted_archive}")"
+    artifact_absolute="$(cd "${artifact_dir}" && pwd -P)/${artifact_name}"
+    if [[ "${accepted_absolute}" != "${artifact_absolute}" ]]; then
+        staged_archive="$(mktemp "${artifact_dir}/.sfiora-ios-promote.XXXXXX")"
+        if ! cp "${accepted_archive}" "${staged_archive}" \
+            || [[ "$(sfiora_sha256 "${staged_archive}")" != "${accepted_sha256}" ]] \
+            || ! mv -f "${staged_archive}" "${artifact_path}"; then
+            echo "Unable to promote the accepted Sfiora XCFramework." >&2
+            find "${staged_archive}" -delete 2>/dev/null || true
+            exit 1
+        fi
+    fi
+    sfiora_write_checksum "${artifact_path}"
+    printf '%s\n' "${artifact_path}"
+    exit 0
+fi
+
 temporary_root="${TMPDIR:-/tmp}"
 temporary_dir="$(mktemp -d "${temporary_root%/}/sfiora-ios-package.XXXXXX")"
 trap 'sfiora_cleanup_temporary_directory "${temporary_dir}"' EXIT

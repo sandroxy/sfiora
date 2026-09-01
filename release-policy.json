@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "kind": "plugin-release-policy",
+  "plugin": "sfiora",
+  "sourceRepository": "https://github.com/sandroxy/sfiora.git",
+  "verifierRepository": "https://github.com/sandroxy/integrated-plugins.git",
+  "candidateSchemaVersion": 2,
+  "acceptanceReceiptSchemaVersion": 2,
+  "qualifications": [
+    "adapterProvenanceVerified",
+    "androidMavenSigned",
+    "iosBinarySourceVerified",
+    "nativeManifestVerified",
+    "versionUnpublished"
+  ],
+  "artifactRoles": {
+    "required": [
+      "checksum-native-android-core-aar",
+      "checksum-native-android-maven-repository",
+      "checksum-native-android-ui-aar",
+      "checksum-native-ios-xcframework",
+      "checksum-react-native-package",
+      "checksum-uniapp-legacy-package",
+      "native-android-core-aar",
+      "native-android-maven-repository",
+      "native-android-ui-aar",
+      "native-build-checksums",
+      "native-build-manifest",
+      "native-ios-xcframework",
+      "react-native-package",
+      "uniapp-legacy-package"
+    ],
+    "conditional": {}
+  },
+  "acceptance": {
+    "automatedTargets": [
+      "android",
+      "ios",
+      "react-native-android",
+      "react-native-ios",
+      "uniapp"
+    ],
+    "manualTargets": [
+      "native-android-nfc-device",
+      "native-ios-nfc-device",
+      "react-native-android-nfc-device",
+      "react-native-ios-nfc-device",
+      "uniapp-android-nfc-device",
+      "uniapp-ios-nfc-device"
+    ]
+  }
+}

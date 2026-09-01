@@ -2,6 +2,13 @@
 
 import PackageDescription
 
+let sfioraVersion = "1.0.0"
+let sfioraReleaseBaseURL =
+    "https://github.com/sandroxy/sfiora/releases/download/\(sfioraVersion)"
+let sfioraBinaryURL = "\(sfioraReleaseBaseURL)/sfiora-\(sfioraVersion).xcframework.zip"
+let sfioraBinaryChecksum =
+    "b41f73f040569923ee160b03a3cebfdfc04b13c82f57235c454f30fa8052e71f"
+
 let package = Package(
     name: "Sfiora",
     platforms: [
@@ -14,19 +21,10 @@ let package = Package(
         )
     ],
     targets: [
-        .target(
+        .binaryTarget(
             name: "Sfiora",
-            path: "native/ios/Sources/Sfiora"
-        ),
-        .testTarget(
-            name: "SfioraTests",
-            dependencies: ["Sfiora"],
-            path: "tests",
-            sources: ["ios"],
-            resources: [
-                .process("fixtures/ndef-vectors.json")
-            ]
-        ),
-    ],
-    swiftLanguageVersions: [.v5]
+            url: sfioraBinaryURL,
+            checksum: sfioraBinaryChecksum
+        )
+    ]
 )

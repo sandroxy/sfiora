@@ -18,6 +18,13 @@ done
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 initial_commit="$(git -C "${sfiora_root}" rev-parse HEAD)"
+ios_binary_source_commit="${SFIORA_IOS_ACCEPTED_SOURCE_COMMIT:-${initial_commit}}"
+ios_binary_promoted=false
+if [[ -n "${SFIORA_IOS_ACCEPTED_XCFRAMEWORK_ZIP:-}" ]] \
+    && [[ -n "${SFIORA_IOS_ACCEPTED_XCFRAMEWORK_SHA256:-}" ]] \
+    && [[ -n "${SFIORA_IOS_ACCEPTED_SOURCE_COMMIT:-}" ]]; then
+    ios_binary_promoted=true
+fi
 
 sfiora_assert_version_unpublished
 
@@ -33,9 +40,16 @@ if [[ ${allow_unsigned} -eq 0 && -z "${SFIORA_SIGNING_KEY:-}" ]]; then
     echo "Use --allow-unsigned only for local pipeline validation." >&2
     exit 1
 fi
+if [[ ${allow_dirty} -eq 0 && ${allow_unsigned} -eq 0 ]] \
+    && [[ "${ios_binary_promoted}" != true ]]; then
+    echo "A formal candidate requires an accepted Sfiora XCFramework triplet." >&2
+    echo "Build it first with package-native-ios.sh, then promote those exact bytes." >&2
+    exit 1
+fi
 
 "${script_dir}/verify-release-metadata.sh"
 "${script_dir}/package-native.sh" all
+"${script_dir}/verify-release-metadata.sh"
 android_maven_signed=false
 if [[ -n "${SFIORA_SIGNING_KEY:-}" ]]; then
     "${script_dir}/verify-native-android.sh" --skip-package --require-signatures
@@ -81,14 +95,17 @@ if [[ ${allow_dirty} -eq 0 ]] \
     exit 1
 fi
 ruby -rjson -rdigest -e '
-    version, commit, dirty, signed, root, output, *files = ARGV
+    version, commit, dirty, signed, ios_source_commit, ios_promoted,
+      root, output, *files = ARGV
     payload = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       plugin: "sfiora",
       version: version,
       commit: commit,
       dirty: dirty == "true",
       androidMavenSigned: signed == "true",
+      iosBinarySourceCommit: ios_source_commit,
+      iosBinaryPromoted: ios_promoted == "true",
       artifacts: files.map do |file|
         {
           file: file.delete_prefix("#{root}/"),
@@ -103,6 +120,8 @@ ruby -rjson -rdigest -e '
     "${commit}" \
     "${dirty}" \
     "${android_maven_signed}" \
+    "${ios_binary_source_commit}" \
+    "${ios_binary_promoted}" \
     "${sfiora_root}" \
     "${manifest_path}" \
     "${artifacts[@]}"

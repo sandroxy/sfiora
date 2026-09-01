@@ -62,19 +62,25 @@ for artifact_path in "${artifacts[@]}"; do
     sfiora_verify_checksum "${artifact_path}"
 done
 
-read -r native_commit native_dirty native_signed < <(ruby -rjson -rdigest -e '
+read -r native_commit native_dirty native_signed ios_binary_source_commit \
+    ios_binary_promoted < <(ruby -rjson -rdigest -e '
   manifest_path, version, root, *files = ARGV
   manifest = JSON.parse(File.read(manifest_path))
-  abort("Unexpected native manifest schema") unless manifest.fetch("schemaVersion") == 1
+  abort("Unexpected native manifest schema") unless manifest.fetch("schemaVersion") == 2
   abort("Unexpected native manifest plugin") unless manifest.fetch("plugin") == "sfiora"
   abort("Unexpected native manifest version") unless manifest.fetch("version") == version
   commit = manifest.fetch("commit")
   dirty = manifest.fetch("dirty")
   signed = manifest.fetch("androidMavenSigned")
+  ios_source_commit = manifest.fetch("iosBinarySourceCommit")
+  ios_promoted = manifest.fetch("iosBinaryPromoted")
   abort("Invalid native manifest commit") unless
     commit.is_a?(String) && commit.match?(/\A[0-9a-f]{40}\z/)
   abort("Invalid native manifest dirty flag") unless [true, false].include?(dirty)
   abort("Invalid native manifest signing flag") unless [true, false].include?(signed)
+  abort("Invalid iOS binary source commit") unless
+    ios_source_commit.is_a?(String) && ios_source_commit.match?(/\A[0-9a-f]{40}\z/)
+  abort("Invalid iOS binary promotion flag") unless [true, false].include?(ios_promoted)
   indexed = manifest.fetch("artifacts").to_h { |entry| [entry.fetch("file"), entry] }
   files.each do |file|
     relative = file.delete_prefix("#{root}/")
@@ -84,7 +90,7 @@ read -r native_commit native_dirty native_signed < <(ruby -rjson -rdigest -e '
     abort("Native manifest checksum differs for #{relative}") unless
       entry.fetch("sha256") == Digest::SHA256.file(file).hexdigest
   end
-  puts [commit, dirty, signed].join(" ")
+  puts [commit, dirty, signed, ios_source_commit, ios_promoted].join(" ")
 ' "${native_manifest}" "${sfiora_version}" "${sfiora_root}" \
     "${core_aar}" "${ui_aar}" "${maven_repository}" "${ios_framework}")
 if [[ "${native_commit}" != "${initial_commit}" ]]; then
@@ -95,6 +101,26 @@ if [[ ${allow_unsigned} -eq 0 && "${native_signed}" != true ]]; then
     echo "A formal candidate requires signed Android Maven artifacts." >&2
     echo "Use --allow-unsigned only to create a non-acceptable rehearsal." >&2
     exit 1
+fi
+
+ios_binary_source_verified=false
+ios_binary_inputs=(
+    LICENSE
+    plugin.json
+    native/ios
+    scripts/package-native-ios.sh
+    scripts/release-common.sh
+)
+if [[ "${ios_binary_promoted}" == true ]] \
+    && git -C "${sfiora_root}" cat-file -e \
+        "${ios_binary_source_commit}^{commit}" 2>/dev/null \
+    && git -C "${sfiora_root}" merge-base --is-ancestor \
+        "${ios_binary_source_commit}" "${initial_commit}" \
+    && git -C "${sfiora_root}" diff --quiet \
+        "${ios_binary_source_commit}" "${initial_commit}" -- "${ios_binary_inputs[@]}" \
+    && git -C "${sfiora_root}" diff --quiet -- "${ios_binary_inputs[@]}" \
+    && git -C "${sfiora_root}" diff --cached --quiet -- "${ios_binary_inputs[@]}"; then
+    ios_binary_source_verified=true
 fi
 
 react_native_metadata="$(tar -xOf "${react_native_package}" package/package.json)"
@@ -143,13 +169,17 @@ fi
 
 state=candidate
 output_root="${sfiora_root}/dist/candidates"
-if [[ "${dirty}" == true || "${native_dirty}" == true || "${native_signed}" != true ]]; then
+if [[ "${dirty}" == true \
+    || "${native_dirty}" == true \
+    || "${native_signed}" != true \
+    || "${ios_binary_source_verified}" != true ]]; then
     state=rehearsal
     output_root="${sfiora_root}/dist/rehearsals"
 fi
 
 snapshot_arguments=(
     --plugin sfiora
+    --policy "${sfiora_root}/release-policy.json"
     --version "${sfiora_version}"
     --repository "${sfiora_repository}"
     --commit "${commit}"
@@ -160,7 +190,19 @@ snapshot_arguments=(
     --qualification "androidMavenSigned=${native_signed}"
     --qualification nativeManifestVerified=true
     --qualification adapterProvenanceVerified=true
+    --qualification "iosBinarySourceVerified=${ios_binary_source_verified}"
     --qualification versionUnpublished=true
+    --automated-target android
+    --automated-target ios
+    --automated-target react-native-android
+    --automated-target react-native-ios
+    --automated-target uniapp
+    --manual-target native-android-nfc-device
+    --manual-target native-ios-nfc-device
+    --manual-target react-native-android-nfc-device
+    --manual-target react-native-ios-nfc-device
+    --manual-target uniapp-android-nfc-device
+    --manual-target uniapp-ios-nfc-device
     --artifact "native-android-core-aar=${core_aar}"
     --artifact "native-android-ui-aar=${ui_aar}"
     --artifact "native-android-maven-repository=${maven_repository}"
@@ -170,8 +212,17 @@ snapshot_arguments=(
     --artifact "native-build-manifest=${native_manifest}"
     --artifact "native-build-checksums=${native_checksums}"
 )
-for artifact_path in "${artifacts[@]}"; do
-    role="$(basename "${artifact_path}" | tr '[:upper:]_.' '[:lower:]--')"
+sidecar_artifacts=(
+    "native-android-core-aar=${core_aar}"
+    "native-android-ui-aar=${ui_aar}"
+    "native-android-maven-repository=${maven_repository}"
+    "native-ios-xcframework=${ios_framework}"
+    "react-native-package=${react_native_package}"
+    "uniapp-legacy-package=${uniapp_package}"
+)
+for artifact_spec in "${sidecar_artifacts[@]}"; do
+    role="${artifact_spec%%=*}"
+    artifact_path="${artifact_spec#*=}"
     snapshot_arguments+=(--artifact "checksum-${role}=${artifact_path}.sha256")
 done
 

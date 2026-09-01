@@ -27,6 +27,7 @@
       "minimumSdk": 21
     },
     "ios": {
+      "distribution": "binarySwiftPackage",
       "module": "Sfiora",
       "minimumVersion": "13.0"
     }

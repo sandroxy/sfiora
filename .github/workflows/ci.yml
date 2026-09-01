@@ -28,6 +28,13 @@ jobs:
         run: node --test tests/js/bridge-wrappers.test.mjs
       - name: Verify release metadata
         run: ./scripts/verify-release-metadata.sh
+      - name: Verify release policy and scripts
+        run: |
+          ruby -c scripts/release-policy.rb
+          ruby -c scripts/snapshot-release-candidate.rb
+          ruby -c scripts/verify-publish-candidate.rb
+          bash -n scripts/prepare-release-candidate.sh
+          ruby scripts/test-release-policy.rb
 
   android:
     name: Android
@@ -84,13 +91,11 @@ jobs:
           xcrun swift-format lint --strict --recursive
           Package.swift native/ios/Sources tests/ios
           adapters/shared/ios/Sources adapters/shared/ios/Tests
-      - name: Test Swift package
-        run: swift test -Xswiftc -warnings-as-errors
+      - name: Test canonical iOS source
+        run: ./scripts/test-native-ios-source.sh
       - name: Test shared iOS bridge
         working-directory: adapters/shared/ios
         run: swift test -Xswiftc -warnings-as-errors
-      - name: Build release Swift package
-        run: swift build -c release -Xswiftc -warnings-as-errors
       - name: Build for iOS Simulator
         run: >-
           xcodebuild -quiet -scheme Sfiora
