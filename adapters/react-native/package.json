@@ -1,7 +1,7 @@
 {
   "name": "@sandrox/sfiora",
   "version": "1.0.0",
-  "description": "Contract-first NFC reading and verified NDEF writing for React Native on Android and iOS.",
+  "description": "NFC tag reading, verified NDEF writing, and marker-based initialization for React Native on Android and iOS.",
   "main": "index.js",
   "react-native": "index.js",
   "types": "index.d.ts",
@@ -19,6 +19,7 @@
     "SfioraReactNative.podspec",
     "sfiora-artifacts.json",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {

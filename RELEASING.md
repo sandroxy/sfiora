@@ -23,6 +23,35 @@ published version. Rebuilding a rejected, still-unpublished version replaces
 the current manifest; changed bytes or a new source commit change its candidate
 id and invalidate previous acceptance results.
 
+## Documentation
+
+The root Chinese and English READMEs are consumer installation guides. Keep
+their platform coverage, native examples, and behavior descriptions aligned.
+Adapter READMEs describe complete integration, request/result semantics,
+lifecycle handling, and platform limits. Public documentation must follow the
+shipped APIs and must not depend on a business host or an internal test page.
+
+Keep product-version literals in `plugin.json`, package manifests, changelogs,
+and release records; use `<version>` in stable installation examples. Framework
+and operating-system requirements remain explicit in consumer documentation.
+Maintain release notes once in `CHANGELOG.md`. Packaging copies that file into
+RN and legacy packages as `CHANGELOG.md`, and into the UTS package as
+`changelog.md`. The UTS `readme.md` is copied from `adapters/uniapp/README.md`;
+edit its source rather than a generated consumer or a second market-only guide.
+
+Finalize packaged documentation before recording a candidate. Documentation
+inside an npm tarball or UNI ZIP is part of that artifact's identity. Updating
+it requires new adapter packages, a new candidate, and matching automated
+consumer results. Native artifacts with unchanged inputs may be reused through
+the existing reuse workflow. Additional device checks follow actual executable
+changes and risks; do not discard previous physical test observations solely
+because wording changed or copy an old acceptance receipt to a new candidate.
+
+After publication, ordinary documentation corrections can be committed to the
+default branch. They must not move a public tag, replace release files, or
+rebuild an already published version. Registry documentation embedded in a
+package remains the copy shipped with that version.
+
 ## Build and snapshot
 
 Start from a clean commit whose `plugin.json` version has no local or `origin`

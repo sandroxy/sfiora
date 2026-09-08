@@ -59,6 +59,7 @@ for file_name in \
     cp "${source_dir}/${file_name}" "${package_dir}/${file_name}"
 done
 cp "${sfiora_root}/LICENSE" "${package_dir}/LICENSE"
+cp "${sfiora_root}/CHANGELOG.md" "${package_dir}/CHANGELOG.md"
 cp "${sfiora_root}/contract/types.ts" "${package_dir}/contract/types.ts"
 cp "${sfiora_root}/contract/bridge.schema.json" \
     "${package_dir}/contract/bridge.schema.json"

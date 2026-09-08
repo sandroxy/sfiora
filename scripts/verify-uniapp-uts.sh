@@ -23,6 +23,7 @@ if [[ -n "$(find "${package_root}" -type l -print -quit)" ]]; then
     echo "UTS package contains a symbolic link" >&2; exit 1
 fi
 cmp "${package_root}/readme.md" "${sfiora_root}/adapters/uniapp/README.md"
+cmp "${package_root}/changelog.md" "${sfiora_root}/CHANGELOG.md"
 ruby -rjson -rdigest -ropen3 -e '
   root, source, version = ARGV
   package = JSON.parse(File.read("#{root}/package.json"))

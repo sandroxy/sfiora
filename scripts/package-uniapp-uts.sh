@@ -27,6 +27,7 @@ while IFS= read -r -d '' relative; do
     cp "${sfiora_root}/${relative}" "${destination}"
 done < <(git -C "${sfiora_root}" ls-files -cz --others --exclude-standard -- "uni_modules/${sfiora_uniapp_id}")
 cp "${sfiora_root}/adapters/uniapp/README.md" "${package_root}/readme.md"
+cp "${sfiora_root}/CHANGELOG.md" "${package_root}/changelog.md"
 android_libs="${package_root}/utssdk/app-android/libs"
 ios_frameworks="${package_root}/utssdk/app-ios/Frameworks"
 mkdir -p "${android_libs}" "${ios_frameworks}" "${package_root}/contract"

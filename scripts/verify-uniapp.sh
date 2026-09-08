@@ -85,6 +85,7 @@ if [[ -n "${forbidden_entry}" ]]; then
 fi
 
 cmp "${package_root}/README.md" "${sfiora_root}/adapters/uniapp/README.md"
+cmp "${package_root}/CHANGELOG.md" "${sfiora_root}/CHANGELOG.md"
 cmp "${package_root}/LICENSE" "${sfiora_root}/LICENSE"
 cmp "${package_root}/js_sdk/index.js" "${sfiora_root}/adapters/uniapp/index.js"
 cmp "${package_root}/contract/types.d.ts" "${sfiora_root}/contract/types.ts"

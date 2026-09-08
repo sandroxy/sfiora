@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 
-for command_name in node npm pod ruby tar xcodebuild; do
+for command_name in cmp node npm pod ruby tar xcodebuild; do
     sfiora_require_command "${command_name}"
 done
 
@@ -36,6 +36,8 @@ package_dir="${temporary_dir}/package"
 consumer_dir="${temporary_dir}/consumer"
 mkdir -p "${package_dir}" "${consumer_dir}"
 tar -xzf "${artifact_path}" --strip-components 1 -C "${package_dir}"
+cmp "${package_dir}/README.md" "${sfiora_root}/adapters/react-native/README.md"
+cmp "${package_dir}/CHANGELOG.md" "${sfiora_root}/CHANGELOG.md"
 cp -R "${sfiora_root}/tests/consumers/react-native/." "${consumer_dir}"
 
 if find "${package_dir}" \

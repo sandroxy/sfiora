@@ -86,6 +86,7 @@ cp "${sfiora_root}/contract/types.ts" \
     "${package_root}/contract/types.d.ts"
 cp "${sfiora_root}/LICENSE" "${package_root}/LICENSE"
 cp "${sfiora_root}/adapters/uniapp/README.md" "${package_root}/README.md"
+cp "${sfiora_root}/CHANGELOG.md" "${package_root}/CHANGELOG.md"
 
 ruby -e '
   source, destination = ARGV
