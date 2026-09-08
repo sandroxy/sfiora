@@ -36,8 +36,8 @@ export const invokeSfioraNative: InvokeSfioraNative = function(method: string, a
 export const getCapabilities: GetCapabilities = function(): Promise<UTSJSONObject> {
   return invokeObject(invokeSfioraNative, 'getCapabilities', [])
 }
-export const startScan: StartScan = function(options: UTSJSONObject = {}): Promise<UTSJSONObject> {
-  return invokeObject(invokeSfioraNative, 'startScan', [options])
+export const startScan: StartScan = function(options?: UTSJSONObject): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'startScan', [options ?? {}])
 }
 export const cancelScan: CancelScan = function(): Promise<void> {
   return invokeVoid(invokeSfioraNative, 'cancelScan')
@@ -45,11 +45,11 @@ export const cancelScan: CancelScan = function(): Promise<void> {
 export const isScanning: IsScanning = function(): Promise<boolean> {
   return invokeBoolean(invokeSfioraNative, 'isScanning')
 }
-export const writeNdef: WriteNdef = function(message: UTSJSONObject, options: UTSJSONObject = {}): Promise<UTSJSONObject> {
-  return invokeObject(invokeSfioraNative, 'writeNdef', [message, options])
+export const writeNdef: WriteNdef = function(message: UTSJSONObject, options?: UTSJSONObject): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'writeNdef', [message, options ?? {}])
 }
-export const initializeNdef: InitializeNdef = function(message: UTSJSONObject, marker: UTSJSONObject, options: UTSJSONObject = {}): Promise<UTSJSONObject> {
-  return invokeObject(invokeSfioraNative, 'initializeNdef', [message, marker, options])
+export const initializeNdef: InitializeNdef = function(message: UTSJSONObject, marker: UTSJSONObject, options?: UTSJSONObject): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'initializeNdef', [message, marker, options ?? {}])
 }
 export const cancelWrite: CancelWrite = function(): Promise<void> {
   return invokeVoid(invokeSfioraNative, 'cancelWrite')

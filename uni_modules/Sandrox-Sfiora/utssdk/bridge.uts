@@ -1,14 +1,16 @@
 import { InvokeSfioraNative } from './interface.uts'
 
-export class SfioraError extends Error {
-  code: string
-  recoverable: boolean
-  nativeError: UTSJSONObject | null
+// UTS Error.code is numeric on iOS; preserve our string code in a Promise rejection value.
+export class SfioraError {
+  name: string = 'SfioraError'
+  code: string = 'INTERNAL_ERROR'
+  message: string = 'The NFC operation failed'
+  recoverable: boolean = false
+  nativeError: UTSJSONObject | null = null
 
   constructor(payload: UTSJSONObject) {
-    super(payload.getString('message') ?? 'The NFC operation failed')
-    this.name = 'SfioraError'
     this.code = payload.getString('code') ?? 'INTERNAL_ERROR'
+    this.message = payload.getString('message') ?? 'The NFC operation failed'
     this.recoverable = payload.getBoolean('recoverable') ?? false
     this.nativeError = payload.getJSON('nativeError')
   }
@@ -27,7 +29,7 @@ function invoke(transport: InvokeSfioraNative, method: string, args: UTSJSONObje
       reject(new SfioraError({ code: 'INVALID_OPTIONS', message: 'NFC arguments must be JSON values', recoverable: true }))
       return
     }
-    transport(method, json, (resultJson: string) => {
+    transport(method, json!, (resultJson: string) => {
       const result = JSON.parseObject(resultJson)
       if (result == null) {
         reject(invalidResponse())
@@ -44,18 +46,28 @@ function invoke(transport: InvokeSfioraNative, method: string, args: UTSJSONObje
 }
 
 export function invokeObject(transport: InvokeSfioraNative, method: string, args: UTSJSONObject[]): Promise<UTSJSONObject> {
-  return invoke(transport, method, args).then((envelope: UTSJSONObject): UTSJSONObject => {
-    const data = envelope.getJSON('data')
-    if (data == null) throw invalidResponse()
-    return data
+  return invoke(transport, method, args).then((envelope: UTSJSONObject): Promise<UTSJSONObject> => {
+    return new Promise<UTSJSONObject>((resolve, reject) => {
+      const data = envelope.getJSON('data')
+      if (data == null) {
+        reject(invalidResponse())
+        return
+      }
+      resolve(data)
+    })
   })
 }
 
 export function invokeBoolean(transport: InvokeSfioraNative, method: string): Promise<boolean> {
-  return invoke(transport, method, []).then((envelope: UTSJSONObject): boolean => {
-    const data = envelope.getBoolean('data')
-    if (data == null) throw invalidResponse()
-    return data
+  return invoke(transport, method, []).then((envelope: UTSJSONObject): Promise<boolean> => {
+    return new Promise<boolean>((resolve, reject) => {
+      const data = envelope.getBoolean('data')
+      if (data == null) {
+        reject(invalidResponse())
+        return
+      }
+      resolve(data)
+    })
   })
 }
 

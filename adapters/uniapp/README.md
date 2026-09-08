@@ -18,9 +18,11 @@ const capabilities = await sfiora.getCapabilities();
 const tag = await sfiora.startScan();
 ```
 
-For classic UniApp with UTS, use
-`@/uni_modules/Sandrox-Sfiora/js_sdk/index.js` as the import path. In uni-app x,
-import the methods directly from `@/uni_modules/Sandrox-Sfiora`.
+For classic UniApp with UTS and uni-app x Vapor, use
+`@/uni_modules/Sandrox-Sfiora/js_sdk/index.js` as the import path. This JSON callback
+adapter preserves structured errors across the native/JavaScript boundary.
+In uni-app x Android VDOM, import the native UTS methods directly from
+`@/uni_modules/Sandrox-Sfiora`.
 
 iOS applications must provide `NFCReaderUsageDescription` and enable the
 `TAG` NFC reader-session format. Android declares NFC as an
