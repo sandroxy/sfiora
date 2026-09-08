@@ -6,28 +6,29 @@ its exact public files are locked by the consumer repository after publication.
 
 ## Release states
 
-- `dist/native-*`, `dist/react-native`, and `dist/uniapp` are mutable build
-  workspaces. Their filenames are not acceptance evidence.
-- `dist/rehearsals/<version>/<candidate-id>/` contains a snapshot made from a
-  dirty source tree or unsigned Maven output. It can test the pipeline but can
-  never be accepted or published.
-- `dist/candidates/<version>/<candidate-id>/` contains an immutable, clean,
-  signed, acceptance-eligible artifact set. Its `candidate.json` binds every
-  file to its byte length, SHA-256, source commit, artifact-set digest, and
-  candidate id.
+- Platform directories under `dist/` contain the release files. Their
+  filenames are not acceptance evidence.
+- `dist/candidate.json` records the current set using paths relative to
+  `dist/`, binding every file to its byte length, SHA-256, source commit,
+  artifact-set digest, and candidate id. It does not copy the artifacts.
+- Clean, signed output with verified provenance has state `candidate`.
+  A dirty, unsigned, or unpromoted iOS build uses the same manifest with state
+  `rehearsal`; it can test the pipeline but cannot be accepted or published.
 - A public stable release exists only after those exact candidate bytes are
   published. The separate `integrated-plugins` repository then pins their
   public URLs and hashes in `verification/stable-lock.json`.
 
 Never use a bare version number to choose local bytes and never overwrite a
-published version. A rejected build keeps its own candidate id; rebuild the
-same still-unpublished product version and obtain a different id.
+published version. Rebuilding a rejected, still-unpublished version replaces
+the current manifest; changed bytes or a new source commit change its candidate
+id and invalidate previous acceptance results.
 
 ## Build and snapshot
 
 Start from a clean commit whose `plugin.json` version has no local or `origin`
-tag. Formal Android output requires `SFIORA_SIGNING_KEY`. The public Swift
-Package is binary, so iOS uses a two-commit handoff: build the XCFramework once
+tag, with packaged documentation finalized. Formal Android output requires
+`SFIORA_SIGNING_KEY`. The public Swift Package is binary, so iOS uses a
+two-commit handoff: build the XCFramework once
 from the clean source commit, then record those exact bytes in `Package.swift`.
 
 ```sh
@@ -38,10 +39,9 @@ export SFIORA_IOS_SHA256="$(swift package compute-checksum "${SFIORA_IOS_ARCHIVE
 ```
 
 Update the binary target URL and checksum in `Package.swift`, run the metadata
-checks, and commit that release metadata without changing `native/ios` or
-the other binary inputs (`LICENSE`, `plugin.json`, `package-native-ios.sh`, or
-`release-common.sh`). Then promote the already-built archive while preparing
-the complete native release:
+checks, and commit that release metadata without changing the inputs listed in
+[`native-input-digest.rb`](scripts/native-input-digest.rb). Then promote the
+already-built archive while preparing the complete native release:
 
 ```sh
 SFIORA_IOS_ACCEPTED_XCFRAMEWORK_ZIP="${SFIORA_IOS_ARCHIVE}" \
@@ -50,14 +50,41 @@ SFIORA_IOS_ACCEPTED_SOURCE_COMMIT="${SFIORA_IOS_SOURCE_COMMIT}" \
   ./scripts/prepare-native-release.sh
 ./scripts/package-react-native.sh
 ./scripts/package-uniapp.sh
+./scripts/package-uniapp-uts.sh
+./scripts/verify-react-native.sh
+./scripts/verify-uniapp.sh
+./scripts/verify-uniapp-uts.sh
 ./scripts/prepare-release-candidate.sh
 ```
 
-The last command prints the absolute `candidate.json` path. It validates the
+The last command prints the absolute `dist/candidate.json` path. It validates the
 native manifest, checksum sidecars, adapter identities, embedded-native
-provenance, and the unchanged iOS source lineage before copying the complete
-set into `dist/candidates`. A locally rebuilt iOS archive that was not promoted
-with all three accepted-binary values can only produce a rehearsal.
+provenance, and the unchanged iOS source lineage before recording the existing
+files. A locally rebuilt iOS archive that was not promoted with all three
+accepted-binary values can only produce a rehearsal.
+
+Successful recording removes older versioned files only from the selected
+filename families. It retains selected files, the current version, and the
+latest canonical local Git tag's version. Unknown files, symbolic links, and
+historical self-contained candidate directories remain untouched; those older
+candidates remain readable. A tag is a local retention boundary, not proof of
+publication to every registry.
+
+When a rejected candidate's native inputs are unchanged, reuse those exact
+bytes before overwriting any of its files or repackaging adapters:
+
+```sh
+ruby scripts/reuse-native-artifacts.rb --candidate "$(pwd)/dist/candidate.json" --plan
+./scripts/prepare-native-release.sh \
+  --reuse-candidate "$(pwd)/dist/candidate.json" --reuse android --reuse ios \
+  --signature-fingerprint "<existing-public-key-fingerprint>"
+```
+
+Select only the unchanged groups; other groups are rebuilt. Existing artifacts
+at their destination are verified in place. Android reuse verifies signatures
+with the existing public key; rebuilding Android still requires signing
+credentials. Then package and verify the adapters and record the new candidate
+as above. Native reuse does not carry forward acceptance results.
 
 [`release-policy.json`](release-policy.json) is Sfiora's machine-readable
 release contract. Candidate creation and the publication gate require an exact
@@ -71,41 +98,16 @@ the flags do not make an ineligible build acceptable.
 
 ## Consumer acceptance
 
-In a clean checkout of `integrated-plugins`, execute every automated target
-declared by the candidate. Each command writes immutable evidence bound to the
-candidate manifest and verifier commit:
+In a clean checkout of `integrated-plugins`, execute every automated target in
+the candidate. Each isolated host must consume the final package bytes.
+Record each declared NFC device target as `passed`, `pending`, or `failed`
+based on actual testing; keep commands and scenarios in the test repository.
+Further interaction checks follow changed behavior and known risks.
 
-Every candidate-declared target runs in a Sfiora-only consumer. Shared React
-Native and classic UniApp catalog sources are used to generate ignored isolated
-hosts, so another plugin's version or availability cannot influence a Sfiora receipt.
-The combined-showcase smoke is stable-only and never participates in Sfiora
-publication acceptance.
-
-```sh
-./verification/run-acceptance.rb \
-  --candidate /absolute/path/to/candidate.json \
-  --target android
-# Repeat for ios, react-native-android, react-native-ios, and uniapp.
-```
-
-Complete every declared NFC device target against the same staged files. Then
-record each manual result by target; omitted targets remain `pending`, and a
-receipt becomes `accepted` only when every declared automated and manual target
-is `passed`:
-
-```sh
-./verification/record-acceptance.rb \
-  --candidate /absolute/path/to/candidate.json \
-  --manual native-android-nfc-device=passed \
-  --manual native-ios-nfc-device=passed \
-  --manual react-native-android-nfc-device=passed \
-  --manual react-native-ios-nfc-device=passed \
-  --manual uniapp-android-nfc-device=passed \
-  --manual uniapp-ios-nfc-device=passed
-```
-
-Commit the receipt in `integrated-plugins`. A `pending` receipt may document
-unfinished device work but cannot open the publication gate.
+Generated receipts stay in the test repository's ignored output directory.
+The publication gate requires passing automated results and device statuses
+for the exact candidate. The publisher reviews actual NFC behavior and known
+issues before deciding to release.
 
 ## Tag and publish
 
@@ -122,6 +124,26 @@ git tag -a "<version>" -m "Sfiora <version>"
 The gate requires a clean worktree, an annotated version tag pointing to the
 candidate source commit, a clean accepted verifier receipt, and byte-for-byte
 matching artifacts. Upload or publish only the paths printed by the gate.
+`publish-accepted.rb` repeats this gate immediately before each channel operation:
+
+```sh
+./scripts/publish-accepted.rb \
+  --candidate /absolute/path/to/candidate.json \
+  --acceptance /absolute/path/to/accepted-receipt.json \
+  --channel github
+# Other channels: npm, maven, uniapp.
+```
+
+Push the annotated tag before GitHub publication. Maven requires
+`SFIORA_CENTRAL_TOKEN` and final publication of the validated deployment in the
+Central portal. The `uniapp` channel identifies the accepted UTS archive and
+its HBuilderX publication route: open the existing consumer project that
+installed this archive, right-click `uni_modules/Sandrox-Sfiora`, and choose
+**发布到插件市场**. Use the packaged `readme.md`; no second manual copy is needed.
+Keep executable files unchanged through publication. HBuilderX may write back
+market metadata and changelog dates. Verify the public installation separately
+in the test repository. The legacy ZIP is a compatibility/offline artifact.
+Attach both accepted ZIPs to the canonical GitHub Release without repacking.
 
 After every public channel is available, update the Sfiora entry in
 `integrated-plugins/verification/stable-lock.json` with the public URLs, byte

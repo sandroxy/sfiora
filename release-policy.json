@@ -21,6 +21,7 @@
       "checksum-native-ios-xcframework",
       "checksum-react-native-package",
       "checksum-uniapp-legacy-package",
+      "checksum-uniapp-uts-package",
       "native-android-core-aar",
       "native-android-maven-repository",
       "native-android-ui-aar",
@@ -28,7 +29,8 @@
       "native-build-manifest",
       "native-ios-xcframework",
       "react-native-package",
-      "uniapp-legacy-package"
+      "uniapp-legacy-package",
+      "uniapp-uts-package"
     ],
     "conditional": {}
   },
@@ -38,15 +40,24 @@
       "ios",
       "react-native-android",
       "react-native-ios",
-      "uniapp"
+      "uniapp-legacy-android",
+      "uniapp-legacy-ios",
+      "uniapp-uts-android",
+      "uniapp-uts-ios",
+      "uniapp-x-android",
+      "uniapp-x-ios"
     ],
     "manualTargets": [
       "native-android-nfc-device",
       "native-ios-nfc-device",
       "react-native-android-nfc-device",
       "react-native-ios-nfc-device",
-      "uniapp-android-nfc-device",
-      "uniapp-ios-nfc-device"
+      "uniapp-legacy-android-nfc-device",
+      "uniapp-legacy-ios-nfc-device",
+      "uniapp-uts-android-nfc-device",
+      "uniapp-uts-ios-nfc-device",
+      "uniapp-x-android-nfc-device",
+      "uniapp-x-ios-nfc-device"
     ]
   }
 }

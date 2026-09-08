@@ -49,6 +49,18 @@ final class NfcSessionRecoveryTests: XCTestCase {
         XCTAssertEqual(lifecycle.phase, .idle)
     }
 
+    func testWriteCommandsAreNeverReplayedBySessionRecovery() {
+        for code in [7, 8, 202, 203] {
+            XCTAssertFalse(
+                policy.canRetrySessionFailure(
+                    nativeErrorCode: code,
+                    completedRecoveryCount: 0,
+                    writeCommandStarted: true
+                )
+            )
+        }
+    }
+
     func testReleasedSessionCanWaitForOneRecoveryWithoutGoingIdle() {
         var lifecycle = NfcSessionLifecycle<String>()
         XCTAssertEqual(lifecycle.begin(applicationIsActive: true), .start)

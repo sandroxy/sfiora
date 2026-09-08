@@ -8,12 +8,14 @@ require "pathname"
 require "time"
 require "yaml"
 require_relative "release-policy"
+require_relative "native-release-manifest"
 
 options = {}
 OptionParser.new do |parser|
   parser.banner = "Usage: verify-publish-candidate.rb --candidate FILE --acceptance FILE"
   parser.on("--candidate FILE") { |value| options[:candidate] = value }
   parser.on("--acceptance FILE") { |value| options[:acceptance] = value }
+  parser.on("-h", "--help") { puts parser; exit }
 end.parse!
 
 required = %i[candidate acceptance]
@@ -78,6 +80,16 @@ end
 
 ios_entry = entries.find { |entry| entry.fetch("role") == "native-ios-xcframework" }
 abort("Candidate has no public iOS XCFramework") unless ios_entry
+begin
+  manifest_entry = entries.find { |entry| entry.fetch("role") == "native-build-manifest" }
+  native_manifest = JSON.parse(candidate_root.join(manifest_entry.fetch("file")).read)
+  NativeReleaseManifest.validate!(native_manifest, version: version, policy: release_policy)
+  NativeReleaseManifest.verify_candidate!(native_manifest, candidate: candidate)
+  NativeReleaseManifest.verify_reuse!(native_manifest, root: root)
+  NativeReleaseManifest.verify_ios!(native_manifest, root: root, archive: candidate_root.join(ios_entry.fetch("file")))
+rescue NativeReleaseManifest::Error, JSON::ParserError, KeyError => error
+  abort(error.message)
+end
 package_swift = root.join("Package.swift").read
 package_version = package_swift[/let sfioraVersion = "([^"]+)"/, 1]
 package_checksum = package_swift[/let sfioraBinaryChecksum =\s*"([0-9a-f]+)"/, 1]
@@ -128,16 +140,16 @@ abort("Acceptance checks have unexpected fields") unless
 automated_checks = checks.fetch("automatedConsumers")
 manual_checks = checks.fetch("manualDeviceMatrix")
 abort("Automated acceptance targets differ from the candidate") unless
-  automated_checks.keys.sort == acceptance_requirements.fetch("automatedTargets").sort
+  automated_checks.is_a?(Hash) && automated_checks.keys.sort == acceptance_requirements.fetch("automatedTargets").sort
 abort("Manual acceptance targets differ from the candidate") unless
-  manual_checks.keys.sort == acceptance_requirements.fetch("manualTargets").sort
+  manual_checks.is_a?(Hash) && manual_checks.keys.sort == acceptance_requirements.fetch("manualTargets").sort
 abort("Automated consumer acceptance did not pass") unless
   automated_checks.values.all? do |entry|
     entry.is_a?(Hash) && entry.keys.sort == %w[evidence status] && entry.fetch("status") == "passed"
   end
 abort("Manual device acceptance did not pass") unless
   manual_checks.values.all? do |entry|
-    entry.is_a?(Hash) && entry.keys == ["status"] && entry.fetch("status") == "passed"
+    entry.is_a?(Hash) && entry.keys == %w[status] && entry.fetch("status") == "passed"
   end
 verifier = acceptance.fetch("verifier")
 abort("Acceptance verifier has unexpected fields") unless
@@ -146,7 +158,8 @@ abort("Acceptance verifier repository is invalid") unless
   verifier.fetch("repository") == release_policy.fetch("verifierRepository")
 abort("Acceptance was recorded from a dirty verifier worktree") unless verifier.fetch("dirty") == false
 abort("Acceptance verifier commit is invalid") unless verifier.fetch("commit").match?(/\A[0-9a-f]{40}\z/)
-Time.iso8601(acceptance.fetch("recordedAt"))
+recorded_at = Time.iso8601(acceptance.fetch("recordedAt"))
+abort("Acceptance timestamp is in the future") if recorded_at > Time.now.utc
 automated_checks.each do |target, entry|
   evidence = entry.fetch("evidence")
   expected_evidence_fields = %w[
@@ -185,7 +198,7 @@ automated_checks.each do |target, entry|
       evidence_verifier.fetch("dirtyAfter") == false
   started_at = Time.iso8601(evidence.fetch("startedAt"))
   completed_at = Time.iso8601(evidence.fetch("completedAt"))
-  abort("Automated evidence time range differs: #{target}") if completed_at < started_at
+  abort("Automated evidence time range differs: #{target}") if completed_at < started_at || completed_at > recorded_at
 end
 
 head, status = Open3.capture2("git", "-C", root.to_s, "rev-parse", "HEAD")
@@ -202,7 +215,7 @@ tag_commit, status = Open3.capture2("git", "-C", root.to_s, "rev-list", "-n", "1
 abort("Unable to resolve canonical tag #{version}") unless status.success?
 abort("Canonical tag #{version} does not point to the accepted source commit") unless tag_commit.strip == commit
 
-puts "Verified accepted #{plugin} #{version} candidate #{expected_candidate_id}."
+puts "Verified checks and artifacts for #{plugin} #{version}: #{expected_candidate_id}."
 entries.sort_by { |entry| entry.fetch("role") }.each do |entry|
   puts "#{entry.fetch("role")}=#{candidate_root.join(entry.fetch("file"))}"
 end

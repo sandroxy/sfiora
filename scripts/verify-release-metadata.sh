@@ -21,7 +21,7 @@ ruby -rjson -rdigest -e '
 
     adapters = manifest.fetch("adapters")
     abort("plugin.json has unexpected adapter fields") unless
-      adapters.keys.sort == %w[reactNative uniApp]
+      adapters.keys.sort == %w[reactNative uniApp uniAppUts]
     react_native = adapters.fetch("reactNative")
     abort("plugin.json has unexpected React Native fields") unless
       react_native.keys.sort == %w[minimumVersion package]
@@ -39,6 +39,20 @@ ruby -rjson -rdigest -e '
         "module" => "Sfiora",
         "minimumHBuilderX" => "5.24"
       }
+
+    uts = adapters.fetch("uniAppUts")
+    abort("Unexpected UTS product metadata") unless uts == {
+      "kind" => "uts", "id" => "Sandrox-Sfiora", "sourceRoot" => "uni_modules/Sandrox-Sfiora",
+      "minimumHBuilderX" => "5.24", "runtimes" => ["uni-app", "uni-app-x"]
+    }
+    uts_package = JSON.parse(File.read(File.join(root, uts.fetch("sourceRoot"), "package.json")))
+    abort("UTS package identity differs") unless
+      uts_package["id"] == uts["id"] && uts_package["version"] == manifest["version"] &&
+        uts_package.dig("dcloudext", "type") == uts["kind"] && uts_package["license"] == manifest["license"]
+    uts_root = File.join(root, uts.fetch("sourceRoot"), "utssdk")
+    abort("UTS Android minimum differs") unless JSON.parse(File.read(File.join(uts_root, "app-android/config.json")))["minSdkVersion"] == 21
+    abort("UTS iOS minimum differs") unless JSON.parse(File.read(File.join(uts_root, "app-ios/config.json")))["deploymentTarget"] == "13.0"
+    abort("UTS Swift runtime source project is missing") unless File.file?(File.join(root, "adapters/uniapp/ios/SfioraUniRuntime.xcodeproj/project.pbxproj"))
 
     version = manifest.fetch("version")
     abort("Invalid semantic version: #{version}") unless

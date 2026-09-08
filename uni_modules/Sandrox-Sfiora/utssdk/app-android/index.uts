@@ -1,0 +1,59 @@
+import {
+  InvokeSfioraNative, SfioraNativeCallback, GetCapabilities, StartScan,
+  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting,
+} from '../interface.uts'
+import { invokeObject, invokeBoolean, invokeVoid } from '../bridge.uts'
+export { SfioraError } from '../bridge.uts'
+import SfioraBridgeRuntime from 'com.sandrox.sfiora.bridge.SfioraBridgeRuntime'
+import SfioraBridgeJsonCallback from 'com.sandrox.sfiora.bridge.SfioraBridgeJsonCallback'
+
+class RuntimeCallback implements SfioraBridgeJsonCallback {
+  private callback: SfioraNativeCallback
+  constructor(callback: SfioraNativeCallback) {
+    this.callback = callback
+  }
+  override onResult(json: string): void {
+    this.callback(json)
+  }
+}
+
+let lifecycleRegistered = false
+function ensureLifecycle(): void {
+  if (lifecycleRegistered) return
+  lifecycleRegistered = true
+  UTSAndroid.onAppActivityPause(() => { SfioraBridgeRuntime.getShared().close() })
+  UTSAndroid.onAppActivityDestroy(() => { SfioraBridgeRuntime.getShared().close() })
+}
+
+export const invokeSfioraNative: InvokeSfioraNative = function(method: string, argumentsJson: string, callback: SfioraNativeCallback): void {
+  ensureLifecycle()
+  const activity = UTSAndroid.getUniActivity()
+  // Capability queries still work before an Activity exists.
+  const context = activity == null ? UTSAndroid.getAppContext() : activity
+  SfioraBridgeRuntime.getShared().invokeJson(context, method, argumentsJson, new RuntimeCallback(callback))
+}
+
+export const getCapabilities: GetCapabilities = function(): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'getCapabilities', [])
+}
+export const startScan: StartScan = function(options: UTSJSONObject = {}): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'startScan', [options])
+}
+export const cancelScan: CancelScan = function(): Promise<void> {
+  return invokeVoid(invokeSfioraNative, 'cancelScan')
+}
+export const isScanning: IsScanning = function(): Promise<boolean> {
+  return invokeBoolean(invokeSfioraNative, 'isScanning')
+}
+export const writeNdef: WriteNdef = function(message: UTSJSONObject, options: UTSJSONObject = {}): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'writeNdef', [message, options])
+}
+export const initializeNdef: InitializeNdef = function(message: UTSJSONObject, marker: UTSJSONObject, options: UTSJSONObject = {}): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'initializeNdef', [message, marker, options])
+}
+export const cancelWrite: CancelWrite = function(): Promise<void> {
+  return invokeVoid(invokeSfioraNative, 'cancelWrite')
+}
+export const isWriting: IsWriting = function(): Promise<boolean> {
+  return invokeBoolean(invokeSfioraNative, 'isWriting')
+}

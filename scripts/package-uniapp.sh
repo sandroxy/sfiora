@@ -4,6 +4,8 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
+sfiora_parse_package_arguments "$@"
+sfiora_guard_output "${sfiora_root}/dist/uniapp/sfiora-uniapp-${sfiora_version}.zip"
 
 for command_name in ruby zip; do
     sfiora_require_command "${command_name}"
@@ -79,6 +81,7 @@ cp -R "${ios_products}/SfioraUniApp.framework" "${package_root}/ios"
 cp -R "${ios_products}/Sfiora.framework" "${package_root}/ios"
 cp "${sfiora_root}/adapters/uniapp/index.js" \
     "${package_root}/js_sdk/index.js"
+cp "${sfiora_root}/adapters/uniapp/bridge.js" "${package_root}/js_sdk/bridge.js"
 cp "${sfiora_root}/contract/types.ts" \
     "${package_root}/contract/types.d.ts"
 cp "${sfiora_root}/LICENSE" "${package_root}/LICENSE"

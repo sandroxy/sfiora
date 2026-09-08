@@ -57,6 +57,25 @@ sfiora_require_command() {
     fi
 }
 
+sfiora_parse_package_arguments() {
+    sfiora_replace_output=0
+    for argument in "$@"; do
+        case "${argument}" in
+            --replace) sfiora_replace_output=1 ;;
+            *) echo "Unknown package option: ${argument}. Supported: --replace" >&2; exit 1 ;;
+        esac
+    done
+}
+
+sfiora_guard_output() {
+    local output="$1"
+    if [[ -e "${output}" && "${sfiora_replace_output:-0}" != 1 ]]; then
+        echo "Artifact already exists: ${output}. Use --replace to explicitly replace staging output." >&2
+        echo "Accepted candidate snapshots must remain unchanged." >&2
+        exit 1
+    fi
+}
+
 sfiora_sha256() {
     local file_path="$1"
     shasum -a 256 "${file_path}" | awk '{ print $1 }'
@@ -122,6 +141,7 @@ sfiora_assert_version_unpublished() {
         echo "Sfiora ${sfiora_version} already exists on origin and cannot be rebuilt." >&2
         exit 1
     fi
+    ruby "${sfiora_script_dir}/assert-release-version-available.rb"
 }
 
 sfiora_cleanup_temporary_directory() {

@@ -80,6 +80,15 @@ module ReleasePolicy
   end
 
   def validate_candidate!(candidate, policy)
+    validate_artifact_snapshot!(candidate, policy)
+    raise Error, "Candidate acceptance matrix differs from release policy" unless
+      candidate.fetch("acceptance") == policy.fetch("acceptance")
+    candidate
+  end
+
+  # Binary reuse depends on artifact identity and build inputs. The new candidate
+  # must separately satisfy the current acceptance contract.
+  def validate_artifact_snapshot!(candidate, policy)
     expect_fields!(
       candidate,
       %w[
@@ -113,8 +122,6 @@ module ReleasePolicy
     raise Error, "Invalid candidate dirty flag" unless [true, false].include?(dirty)
     raise Error, "An acceptance candidate cannot come from a dirty source" if state == "candidate" && dirty
 
-    raise Error, "Candidate acceptance matrix differs from release policy" unless
-      candidate.fetch("acceptance") == policy.fetch("acceptance")
     qualifications = candidate.fetch("qualifications")
     raise Error, "Candidate qualifications must be an object" unless qualifications.is_a?(Hash)
     expected_qualifications = policy.fetch("qualifications")

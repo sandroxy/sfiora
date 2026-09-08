@@ -24,17 +24,8 @@ jobs:
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: "24"
-      - name: Verify bridge contract and wrappers
-        run: node --test tests/js/bridge-wrappers.test.mjs
-      - name: Verify release metadata
-        run: ./scripts/verify-release-metadata.sh
-      - name: Verify release policy and scripts
-        run: |
-          ruby -c scripts/release-policy.rb
-          ruby -c scripts/snapshot-release-candidate.rb
-          ruby -c scripts/verify-publish-candidate.rb
-          bash -n scripts/prepare-release-candidate.sh
-          ruby scripts/test-release-policy.rb
+      - name: Verify source and release contracts
+        run: ./scripts/check-source.sh
 
   android:
     name: Android
@@ -61,18 +52,17 @@ jobs:
             adapters/android/*.gradle
             adapters/shared/android/*.gradle
             plugin.json
-      - name: Test and assemble
+      - name: Test and lint
         run: >-
           ./gradlew --no-daemon
           :sfiora:testDebugUnitTest
           :sfiora-ui:testDebugUnitTest
           :sfiora:lintRelease
           :sfiora-ui:lintRelease
-          :sfiora:assembleRelease
-          :sfiora-ui:assembleRelease
       - name: Verify release artifacts
         run: >-
           ../../scripts/verify-release-metadata.sh &&
+          ../../scripts/package-native-android.sh &&
           ../../scripts/verify-native-android.sh
       - name: Test shared Android bridge
         run: >-
@@ -98,17 +88,20 @@ jobs:
         run: swift test -Xswiftc -warnings-as-errors
       - name: Build for iOS Simulator
         run: >-
-          xcodebuild -quiet -scheme Sfiora
+          xcodebuild -quiet -project native/ios/Sfiora.xcodeproj -scheme Sfiora
           -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO
           SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
       - name: Build for iOS device
         run: >-
-          xcodebuild -quiet -scheme Sfiora
+          xcodebuild -quiet -project native/ios/Sfiora.xcodeproj -scheme Sfiora
           -destination 'generic/platform=iOS'
           CODE_SIGNING_ALLOWED=NO
           SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
       - name: Verify release artifacts
         run: >-
           ./scripts/verify-release-metadata.sh &&
+          ./scripts/package-native-ios.sh &&
           ./scripts/verify-native-ios.sh
+      - name: Build shared UTS iOS runtime against the packaged core
+        run: ./adapters/uniapp/ios/build-runtime-framework.sh

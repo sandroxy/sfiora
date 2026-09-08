@@ -5,26 +5,32 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 
-skip_package=0
 require_signatures=0
-for argument in "$@"; do
-    case "${argument}" in
-        --skip-package) skip_package=1 ;;
-        --require-signatures) require_signatures=1 ;;
+signature_fingerprint=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --skip-package) shift ;;
+        --require-signatures) require_signatures=1; shift ;;
+        --signature-fingerprint)
+            signature_fingerprint="${2:?Missing signing fingerprint}"
+            shift 2
+            ;;
         *)
-            echo "Usage: $0 [--skip-package] [--require-signatures]" >&2
+            echo "Usage: $0 [--require-signatures] [--signature-fingerprint FINGERPRINT]" >&2
             exit 1
             ;;
     esac
 done
+if [[ -n "${signature_fingerprint}" ]] && [[ ${require_signatures} -ne 1 ]]; then
+    echo "--signature-fingerprint requires --require-signatures." >&2
+    exit 1
+fi
 
 for command_name in jar openssl unzip; do
     sfiora_require_command "${command_name}"
 done
 
-if [[ ${skip_package} -eq 0 ]]; then
-    "${script_dir}/package-native-android.sh"
-fi
+
 
 artifact_dir="${sfiora_root}/dist/native-android"
 core_artifact="${artifact_dir}/sfiora-${sfiora_version}.aar"
@@ -227,7 +233,13 @@ ruby -rjson -e '
     end
   ' "${repository_dir}" "${sfiora_version}"
 
-if [[ ${require_signatures} -eq 1 ]]; then
+if [[ ${require_signatures} -eq 1 && -n "${signature_fingerprint}" ]]; then
+    ruby -I "${script_dir}" -rverify-maven-signatures -e '
+      repository, core, ui, version, signer = ARGV
+      MavenSignatures.verify!(repository: repository, aars: {"sfiora" => core, "sfiora-ui" => ui},
+        version: version, signer: signer)
+    ' "${repository_artifact}" "${core_artifact}" "${ui_artifact}" "${sfiora_version}" "${signature_fingerprint}"
+elif [[ ${require_signatures} -eq 1 ]]; then
     sfiora_require_command gpg
     sfiora_require_command gpgconf
     if [[ -z "${SFIORA_SIGNING_KEY:-}" ]]; then

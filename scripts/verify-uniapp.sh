@@ -23,7 +23,7 @@ if [[ -z "${dcloud_ios_sdk_root}" \
     exit 1
 fi
 
-archive_path="$(${script_dir}/package-uniapp.sh | tail -n 1)"
+archive_path="${sfiora_root}/dist/uniapp/sfiora-uniapp-${sfiora_version}.zip"
 sfiora_verify_checksum "${archive_path}"
 unzip -tq "${archive_path}" >/dev/null
 
@@ -92,21 +92,7 @@ if grep -Fq 'module.exports' "${package_root}/js_sdk/index.js"; then
     echo "UniApp wrapper must be a statically analyzable ES module." >&2
     exit 1
 fi
-for export_marker in \
-    'export class SfioraError' \
-    'export function getCapabilities' \
-    'export function startScan' \
-    'export async function cancelScan' \
-    'export function isScanning' \
-    'export function writeNdef' \
-    'export function initializeNdef' \
-    'export async function cancelWrite' \
-    'export function isWriting'; do
-    if ! grep -Fq "${export_marker}" "${package_root}/js_sdk/index.js"; then
-        echo "UniApp wrapper is missing ESM export: ${export_marker}" >&2
-        exit 1
-    fi
-done
+cmp "${package_root}/js_sdk/bridge.js" "${sfiora_root}/adapters/uniapp/bridge.js"
 if ! grep -Fq "../contract/types" "${package_root}/js_sdk/index.d.ts" \
     || grep -Fq "../../contract/types" "${package_root}/js_sdk/index.d.ts"; then
     echo "UniApp declaration package has an invalid contract import." >&2

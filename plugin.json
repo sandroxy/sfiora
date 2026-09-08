@@ -15,6 +15,16 @@
       "id": "Sandrox-Sfiora",
       "module": "Sfiora",
       "minimumHBuilderX": "5.24"
+    },
+    "uniAppUts": {
+      "kind": "uts",
+      "id": "Sandrox-Sfiora",
+      "sourceRoot": "uni_modules/Sandrox-Sfiora",
+      "minimumHBuilderX": "5.24",
+      "runtimes": [
+        "uni-app",
+        "uni-app-x"
+      ]
     }
   },
   "native": {

@@ -115,7 +115,7 @@ function withSfiora(config, props = {}) {
   config = withEntitlementsPlist(config, (iosConfig) => {
     iosConfig.modResults[
       'com.apple.developer.nfc.readersession.formats'
-    ] = ['NDEF', 'TAG'];
+    ] = ['TAG'];
     return iosConfig;
   });
 

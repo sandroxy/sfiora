@@ -4,6 +4,8 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
+sfiora_parse_package_arguments "$@"
+sfiora_guard_output "${sfiora_root}/dist/react-native/sandrox-sfiora-${sfiora_version}.tgz"
 
 for command_name in npm ruby tar unzip; do
     sfiora_require_command "${command_name}"

@@ -32,6 +32,7 @@ tmp/
 .gradle/
 .kotlin/
 **/build/
+**/build-runtime/
 **/.cxx/
 **/.externalNativeBuild/
 *.aar

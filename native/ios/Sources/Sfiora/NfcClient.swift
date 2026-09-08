@@ -396,16 +396,18 @@ public enum NfcClientState: String, Equatable, Sendable {
             )
             applicationIsActive =
                 UIApplication.shared.applicationState == .active
-            setObservableOperationKind(newRequest.kind)
-
+            let identifier = operationIdentifier
             let decision = lifecycle.begin(
                 applicationIsActive: applicationIsActive
             )
             switch decision {
             case .start:
                 beginCoreNfcSession()
+                if request != nil, operationIdentifier == identifier {
+                    setObservableOperationKind(newRequest.kind)
+                }
             case .waitForForeground:
-                break
+                setObservableOperationKind(newRequest.kind)
             case .busy:
                 finishRequestWithoutSession(
                     .failure(
@@ -665,7 +667,8 @@ public enum NfcClientState: String, Equatable, Sendable {
             if nativeError.domain == NFCErrorDomain,
                 recoveryPolicy.canRetrySessionFailure(
                     nativeErrorCode: nativeError.code,
-                    completedRecoveryCount: recoveryCount
+                    completedRecoveryCount: recoveryCount,
+                    writeCommandStarted: writeCommandStarted
                 )
             {
                 fallback = .retry
@@ -782,6 +785,16 @@ public enum NfcClientState: String, Equatable, Sendable {
             cancelAllWorkItems()
             let completedRequest = request
             let lease = operationLease
+            let normalizedCompletion: NfcClientCompletion
+            if case .failure(let error) = completion, request?.kind == .write {
+                normalizedCompletion = .failure(
+                    error.acknowledgingUnverifiedWrite(
+                        commandStarted: writeCommandStarted, verified: writeVerified
+                    )
+                )
+            } else {
+                normalizedCompletion = completion
+            }
             request = nil
             operationIdentifier = nil
             operationLease = nil
@@ -791,10 +804,11 @@ public enum NfcClientState: String, Equatable, Sendable {
             tagOperationInFlight = false
             writeCommandStarted = false
             writeVerified = false
-            setObservableOperationKind(nil)
             NfcOperationCoordinator.release(lease)
+            // An idle observer may synchronously start the next operation.
+            setObservableOperationKind(nil)
             if let completedRequest {
-                deliver(request: completedRequest, completion: completion)
+                deliver(request: completedRequest, completion: normalizedCompletion)
             }
         }
 
@@ -1542,87 +1556,15 @@ public enum NfcClientState: String, Equatable, Sendable {
             from error: Error,
             defaultCode: NfcErrorCode? = nil
         ) -> NfcError {
-            if let error = error as? NfcError {
-                return error
-            }
-            let native = NfcNativeError(error)
-            let value = error as NSError
-            let reading = request?.kind == .read
-            let fallbackCode = defaultCode ?? (reading ? .readFailed : .writeFailed)
-
-            guard value.domain == NFCErrorDomain else {
-                return NfcError(
-                    code: fallbackCode,
-                    message: reading
-                        ? "The NFC tag could not be read"
-                        : uncertainWriteMessage("The NFC tag could not be written"),
-                    recoverable: true,
-                    nativeError: native
-                )
-            }
-
-            switch value.code {
-            case 1:
-                return NfcError(
-                    code: .nfcUnsupported,
-                    message: "This device does not support the requested Core NFC operation",
-                    recoverable: false,
-                    nativeError: native
-                )
-            case 6:
-                return NfcError(
-                    code: .nfcDisabled,
-                    message: "NFC is unavailable in the current system state",
-                    recoverable: true,
-                    nativeError: native
-                )
-            case 100, 101, 103, 104:
-                return NfcError(
-                    code: .tagLost,
-                    message: uncertainWriteMessage("The NFC tag left the reader field"),
-                    recoverable: true,
-                    nativeError: native
-                )
-            case 200:
-                return NfcError(
-                    code: .userCancelled,
-                    message: reading ? "The NFC scan was cancelled" : "The NFC write was cancelled",
-                    recoverable: true,
-                    nativeError: native
-                )
-            case 201:
-                return NfcError(
-                    code: reading ? .scanTimeout : .writeTimeout,
-                    message: reading
-                        ? "The NFC scan timed out"
-                        : uncertainWriteMessage("The NFC write timed out"),
-                    recoverable: true,
-                    nativeError: native
-                )
-            case 400:
-                return NfcError(
-                    code: .tagReadOnly,
-                    message: "The detected NDEF tag is read-only",
-                    recoverable: false,
-                    nativeError: native
-                )
-            case 402:
-                return NfcError(
-                    code: .ndefCapacityExceeded,
-                    message: "The NDEF message is larger than the tag capacity",
-                    recoverable: false,
-                    nativeError: native
-                )
-            default:
-                return NfcError(
-                    code: fallbackCode,
-                    message: reading
-                        ? "The NFC tag could not be read"
-                        : uncertainWriteMessage("The NFC tag could not be written"),
-                    recoverable: value.code != 2,
-                    nativeError: native
-                )
-            }
+            NfcError.fromCoreNfc(
+                error,
+                domain: NFCErrorDomain,
+                reading: request?.kind == .read,
+                defaultCode: defaultCode
+            ).acknowledgingUnverifiedWrite(
+                commandStarted: request?.kind == .write && writeCommandStarted,
+                verified: writeVerified
+            )
         }
 
         private func isZeroLengthMessage(_ error: Error) -> Bool {
@@ -1634,7 +1576,7 @@ public enum NfcClientState: String, Equatable, Sendable {
             guard request?.kind == .write, writeCommandStarted, !writeVerified else {
                 return message
             }
-            return message + "; the tag may have changed because the write was not verified"
+            return NfcError.unverifiedWriteMessage(message)
         }
 
         private func busyError(for kind: NfcOperationKind) -> NfcError {

@@ -1,0 +1,11 @@
+// Payload fields and error codes follow contract/bridge.schema.json in the package.
+export type SfioraNativeCallback = (json: string) => void
+export type InvokeSfioraNative = (method: string, argumentsJson: string, callback: SfioraNativeCallback) => void
+export type GetCapabilities = () => Promise<UTSJSONObject>
+export type StartScan = (options?: UTSJSONObject) => Promise<UTSJSONObject>
+export type CancelScan = () => Promise<void>
+export type IsScanning = () => Promise<boolean>
+export type WriteNdef = (message: UTSJSONObject, options?: UTSJSONObject) => Promise<UTSJSONObject>
+export type InitializeNdef = (message: UTSJSONObject, marker: UTSJSONObject, options?: UTSJSONObject) => Promise<UTSJSONObject>
+export type CancelWrite = () => Promise<void>
+export type IsWriting = () => Promise<boolean>

@@ -87,3 +87,128 @@ public struct NfcError: Error, Equatable, LocalizedError, Sendable {
         return value
     }
 }
+
+extension NfcError {
+    static func unverifiedWriteMessage(_ message: String) -> String {
+        let warning = "the tag may have changed because the write was not verified"
+        return message.contains(warning) ? message : message + "; " + warning
+    }
+
+    /// Preserve the error identity while acknowledging that a failed write is
+    /// not evidence that the tag still contains its original data.
+    func acknowledgingUnverifiedWrite(commandStarted: Bool, verified: Bool) -> NfcError {
+        guard commandStarted, !verified else {
+            return self
+        }
+        return NfcError(
+            code: code,
+            message: Self.unverifiedWriteMessage(message),
+            recoverable: recoverable,
+            nativeError: nativeError
+        )
+    }
+}
+
+extension NfcError {
+    static func fromCoreNfc(
+        _ error: Error,
+        domain: String,
+        reading: Bool,
+        defaultCode: NfcErrorCode? = nil
+    ) -> NfcError {
+        if let error = error as? NfcError {
+            return error
+        }
+        let native = NfcNativeError(error)
+        let value = error as NSError
+        let fallbackCode = defaultCode ?? (reading ? .readFailed : .writeFailed)
+
+        guard value.domain == domain else {
+            return NfcError(
+                code: fallbackCode,
+                message: reading
+                    ? "The NFC tag could not be read"
+                    : "The NFC tag could not be written",
+                recoverable: true,
+                nativeError: native
+            )
+        }
+
+        switch value.code {
+        case 1:
+            return NfcError(
+                code: .nfcUnsupported,
+                message: "This device does not support the requested Core NFC operation",
+                recoverable: false,
+                nativeError: native
+            )
+        case 6:
+            return NfcError(
+                code: .nfcDisabled,
+                message: "NFC is unavailable in the current system state",
+                recoverable: true,
+                nativeError: native
+            )
+        case 2:
+            return NfcError(
+                code: .internalError,
+                message: "The app is missing required NFC permissions or tag configuration",
+                recoverable: false,
+                nativeError: native
+            )
+        case 100, 104:
+            return NfcError(
+                code: .tagLost,
+                message: "The NFC tag left the reader field",
+                recoverable: true,
+                nativeError: native
+            )
+        case 200:
+            return NfcError(
+                code: .userCancelled,
+                message: reading ? "The NFC scan was cancelled" : "The NFC write was cancelled",
+                recoverable: true,
+                nativeError: native
+            )
+        case 201:
+            return NfcError(
+                code: reading ? .scanTimeout : .writeTimeout,
+                message: reading
+                    ? "The NFC scan timed out"
+                    : "The NFC write timed out",
+                recoverable: true,
+                nativeError: native
+            )
+        case 203:
+            return NfcError(
+                code: reading ? .scanBusy : .writeBusy,
+                message: "Another NFC session is already active",
+                recoverable: true,
+                nativeError: native
+            )
+        case 400:
+            return NfcError(
+                code: .tagReadOnly,
+                message: "The detected NDEF tag is read-only",
+                recoverable: false,
+                nativeError: native
+            )
+        case 402:
+            return NfcError(
+                code: .ndefCapacityExceeded,
+                message: "The NDEF message is larger than the tag capacity",
+                recoverable: false,
+                nativeError: native
+            )
+        default:
+            return NfcError(
+                code: fallbackCode,
+                message: reading
+                    ? "The NFC tag could not be read"
+                    : "The NFC tag could not be written",
+                recoverable: true,
+                nativeError: native
+            )
+        }
+    }
+}

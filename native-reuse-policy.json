@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "kind": "native-artifact-reuse-policy",
+  "groups": {
+    "android": {
+      "directory": "native-android",
+      "inputs": [
+        "LICENSE",
+        "native/android",
+        "plugin.json",
+        "scripts/package-native-android.sh",
+        "scripts/release-common.sh"
+      ],
+      "roles": [
+        "native-android-core-aar",
+        "native-android-maven-repository",
+        "native-android-ui-aar"
+      ]
+    },
+    "ios": {
+      "directory": "native-ios",
+      "inputs": [
+        "LICENSE",
+        "native/ios",
+        "plugin.json",
+        "scripts/native-input-digest.rb",
+        "scripts/package-native-ios.sh",
+        "scripts/release-common.sh"
+      ],
+      "roles": [
+        "native-ios-xcframework"
+      ]
+    }
+  }
+}

@@ -26,7 +26,7 @@ react_native_gradle_plugin_path="$(cd "${react_native_gradle_plugin_path}" && pw
 react_native_codegen_path="$(cd "${react_native_codegen_path}" && pwd -P)"
 react_native_version="$(node -p "require('${react_native_path}/package.json').version")"
 
-artifact_path="$(${script_dir}/package-react-native.sh | tail -n 1)"
+artifact_path="${sfiora_root}/dist/react-native/sandrox-sfiora-${sfiora_version}.tgz"
 sfiora_verify_checksum "${artifact_path}"
 
 temporary_root="${TMPDIR:-/tmp}"

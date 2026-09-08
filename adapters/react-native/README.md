@@ -10,8 +10,8 @@ Native's legacy architecture and TurboModules.
 npm install @sandrox/sfiora
 ```
 
-iOS applications must provide `NFCReaderUsageDescription` and the `NDEF` and
-`TAG` NFC reader-session entitlements. Expo projects can add
+iOS applications must provide `NFCReaderUsageDescription` and the `TAG` NFC
+reader-session entitlement. Expo projects can add
 `@sandrox/sfiora` to the `plugins` array; the included config plugin applies
 the Android NFC declaration and the required iOS settings.
 

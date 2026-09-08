@@ -15,7 +15,7 @@ Pod::Spec.new do |spec|
   spec.authors = { "SandroX" => "sandroxy" }
   spec.source = {
     :git => package.fetch("repository").fetch("url"),
-    :tag => "v#{spec.version}"
+    :tag => spec.version.to_s
   }
 
   spec.platform = :ios, "13.0"

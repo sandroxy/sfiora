@@ -4,6 +4,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
+sfiora_parse_package_arguments "$@"
+sfiora_guard_output "${sfiora_root}/dist/native-android/sfiora-${sfiora_version}-maven.zip"
+sfiora_guard_output "${sfiora_root}/dist/native-android/sfiora-${sfiora_version}.aar"
+sfiora_guard_output "${sfiora_root}/dist/native-android/sfiora-ui-${sfiora_version}.aar"
 
 sfiora_require_command zip
 

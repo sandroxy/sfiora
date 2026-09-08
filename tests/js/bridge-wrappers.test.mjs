@@ -106,19 +106,17 @@ let esModuleSequence = 0;
 
 async function loadEsModule(relativePath, globals = {}) {
   const absolutePath = resolve(packageRoot, relativePath);
-  const source = await readFile(absolutePath, 'utf8');
+  let source = await readFile(absolutePath, 'utf8');
+  const bridge = await readFile(resolve(dirname(absolutePath), 'bridge.js'), 'utf8');
+  source = source.replaceAll("'./bridge.js'", JSON.stringify(
+    'data:text/javascript;base64,' + Buffer.from(bridge).toString('base64')
+  ));
   esModuleSequence += 1;
   const encodedSource = Buffer.from(source, 'utf8').toString('base64');
-  return withGlobalValue(
-    'uni',
-    Object.prototype.hasOwnProperty.call(globals, 'uni')
-      ? globals.uni
-      : undefined,
-    () =>
-      import(
-        `data:text/javascript;base64,${encodedSource}#sfiora-${esModuleSequence}`
-      )
-  );
+  const module = await import(`data:text/javascript;base64,${encodedSource}#sfiora-${esModuleSequence}`);
+  return Object.fromEntries(Object.entries(module).map(([name, value]) => [
+    name, name === 'SfioraError' ? value : (...args) => withGlobalValue('uni', globals.uni, () => value(...args)),
+  ]));
 }
 
 async function withGlobalValue(name, value, operation) {

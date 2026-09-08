@@ -1,8 +1,8 @@
 # Sfiora
 
 Sfiora is a contract-first NFC reader and writer for Android, iOS, React
-Native, and classic UniApp. Every adapter uses the same native Android and iOS
-cores and the same structured bridge contract.
+Native, classic UniApp, UNI UTS, and uni-app x. Every adapter uses the same
+native Android and iOS cores and the same structured bridge contract.
 
 Sfiora 1.0.0 is currently an unpublished release target. The coordinates below
 are the intended public coordinates, not a claim that a stable package already
@@ -27,7 +27,9 @@ write manufacturer-private memory blocks.
 | Android | `io.github.sandroxy:sfiora:<version>` and optional `sfiora-ui` | API 21 |
 | iOS | Swift Package product `Sfiora` | iOS 13 |
 | React Native | `@sandrox/sfiora` | React Native 0.76 |
-| Classic UniApp | `Sandrox-Sfiora` nativeplugin ZIP | HBuilderX 5.24 |
+| Classic UniApp legacy | `Sandrox-Sfiora` nativeplugin ZIP | HBuilderX 5.24; Android 21 / iOS 13 |
+| Classic UniApp UTS | `Sandrox-Sfiora` uni_modules ZIP | HBuilderX 5.24; Android 21 / iOS 13 |
+| uni-app x | The same UTS ZIP | HBuilderX 5.24; Android 23 / iOS 15 |
 
 ### Android
 
@@ -48,8 +50,8 @@ Add this repository as a Swift Package dependency and link the binary `Sfiora`
 product. Each release tag resolves the checksum-pinned XCFramework attached to
 that same GitHub Release; consumers do not compile Sfiora's canonical source
 target. The host application must provide `NFCReaderUsageDescription` and
-enable the Near Field Communication Tag Reading capability with both `NDEF`
-and `TAG` reader-session formats. FeliCa polling also requires the concrete
+enable the Near Field Communication Tag Reading capability with the `TAG`
+reader-session format. FeliCa polling also requires the concrete
 system codes used by the host application.
 
 ### React Native and UniApp
@@ -59,7 +61,7 @@ The adapters expose `getCapabilities`, `startScan`, `cancelScan`, `isScanning`,
 errors and shared TypeScript definitions.
 
 - [React Native installation and API](adapters/react-native/README.md)
-- [Classic UniApp installation and API](adapters/uniapp/README.md)
+- [UniApp legacy, UTS, and uni-app x installation](adapters/uniapp/README.md)
 - [Machine-readable bridge contract](contract/bridge.schema.json)
 
 ## Security

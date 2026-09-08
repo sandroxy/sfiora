@@ -5,7 +5,7 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 
-skip_package=0
+skip_package=1
 for argument in "$@"; do
     case "${argument}" in
         --skip-package) skip_package=1 ;;
@@ -20,12 +20,11 @@ for command_name in ditto dwarfdump lipo otool plutil unzip xcodebuild xcrun; do
     sfiora_require_command "${command_name}"
 done
 
-if [[ ${skip_package} -eq 0 ]]; then
-    "${script_dir}/package-native-ios.sh"
-fi
+
 
 artifact_path="${sfiora_root}/dist/native-ios/sfiora-${sfiora_version}.xcframework.zip"
 sfiora_verify_checksum "${artifact_path}"
+bash "${script_dir}/verify-ios-xcframework-provenance.sh" "${artifact_path}"     "${sfiora_version}" "$(ruby "${script_dir}/native-input-digest.rb")" >/dev/null
 archive_listing="$(unzip -Z1 "${artifact_path}")"
 if grep -Eq '(^|/)__MACOSX(/|$)|(^|/)\._' <<<"${archive_listing}"; then
     echo "XCFramework archive contains macOS metadata entries." >&2
@@ -141,12 +140,7 @@ if [[ ${framework_count} -ne 2 ]] \
 fi
 
 consumer_source="${temporary_dir}/Consumer.swift"
-cat > "${consumer_source}" <<'EOF'
-import Sfiora
-
-let capabilities: NfcCapabilities = .current
-_ = capabilities.features
-EOF
+cp "${script_dir}/fixtures/ios-core-adapter-api.swift" "${consumer_source}"
 
 device_sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
 simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"

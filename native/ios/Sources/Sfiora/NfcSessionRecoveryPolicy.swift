@@ -14,9 +14,11 @@ struct NfcSessionRecoveryPolicy: Equatable, Sendable {
 
     func canRetrySessionFailure(
         nativeErrorCode: Int,
-        completedRecoveryCount: Int
+        completedRecoveryCount: Int,
+        writeCommandStarted: Bool = false
     ) -> Bool {
-        completedRecoveryCount < maximumRecoveryCount
+        !writeCommandStarted
+            && completedRecoveryCount < maximumRecoveryCount
             && Self.transientSessionErrorCodes.contains(nativeErrorCode)
     }
 

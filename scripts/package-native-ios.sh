@@ -4,6 +4,7 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
+sfiora_parse_package_arguments "$@"
 
 for command_name in git plutil shasum xattr xcodebuild zip; do
     sfiora_require_command "${command_name}"
@@ -23,6 +24,7 @@ ios_binary_inputs=(
     native/ios
     scripts/package-native-ios.sh
     scripts/release-common.sh
+    scripts/native-input-digest.rb
 )
 
 accepted_value_count=0
@@ -63,6 +65,11 @@ if [[ ${accepted_value_count} -eq 3 ]]; then
         echo "Sfiora native iOS inputs changed after the accepted binary was built." >&2
         exit 1
     fi
+    current_digest="$(ruby "${script_dir}/native-input-digest.rb")"
+    committed_digest="$(ruby "${script_dir}/native-input-digest.rb" "${accepted_source_commit}")"
+    [[ "${current_digest}" == "${committed_digest}" ]] || { echo "Uncommitted iOS inputs differ" >&2; exit 1; }
+    bash "${script_dir}/verify-ios-xcframework-provenance.sh" "${accepted_archive}" \
+        "${sfiora_version}" "${current_digest}" "${accepted_source_commit}" >/dev/null
     actual_sha256="$(sfiora_sha256 "${accepted_archive}")"
     if [[ "${actual_sha256}" != "${accepted_sha256}" ]]; then
         echo "Accepted Sfiora XCFramework checksum differs." >&2
@@ -88,6 +95,10 @@ if [[ ${accepted_value_count} -eq 3 ]]; then
     printf '%s\n' "${artifact_path}"
     exit 0
 fi
+
+sfiora_guard_output "${artifact_path}"
+source_commit="$(git -C "${sfiora_root}" rev-parse HEAD)"
+source_digest="$(ruby "${script_dir}/native-input-digest.rb")"
 
 temporary_root="${TMPDIR:-/tmp}"
 temporary_dir="$(mktemp -d "${temporary_root%/}/sfiora-ios-package.XXXXXX")"
@@ -133,6 +144,8 @@ for framework_path in "${device_framework}" "${simulator_framework}"; do
         exit 1
     fi
     cp "${sfiora_root}/LICENSE" "${framework_path}/LICENSE"
+    plutil -insert SfioraSourceCommit -string "${source_commit}" "${framework_path}/Info.plist"
+    plutil -insert SfioraSourceDigest -string "${source_digest}" "${framework_path}/Info.plist"
 done
 for dsym_path in "${device_dsym}" "${simulator_dsym}"; do
     if [[ ! -d "${dsym_path}" ]]; then
@@ -148,6 +161,9 @@ xcodebuild -create-xcframework \
     -debug-symbols "${simulator_dsym}" \
     -output "${xcframework_path}"
 
+[[ "$(ruby "${script_dir}/native-input-digest.rb")" == "${source_digest}" ]] \
+    && [[ "$(git -C "${sfiora_root}" rev-parse HEAD)" == "${source_commit}" ]] \
+    || { echo "iOS sources changed during packaging" >&2; exit 1; }
 mkdir -p "${artifact_dir}"
 rm -f "${artifact_path}" "${artifact_path}.sha256"
 xattr -cr "${xcframework_path}"

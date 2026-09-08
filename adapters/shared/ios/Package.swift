@@ -12,16 +12,16 @@ let package = Package(
         .library(
             name: "SfioraBridgeSupport",
             targets: ["SfioraBridgeSupport"]
-        ),
+        )
     ],
     dependencies: [
-        .package(path: "../../.."),
+        .package(name: "SfioraSource", path: "../../../native/ios")
     ],
     targets: [
         .target(
             name: "SfioraBridgeSupport",
             dependencies: [
-                .product(name: "Sfiora", package: "sfiora"),
+                .product(name: "Sfiora", package: "SfioraSource")
             ]
         ),
         .testTarget(
