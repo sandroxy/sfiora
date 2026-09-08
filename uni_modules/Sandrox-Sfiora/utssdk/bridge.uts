@@ -35,12 +35,13 @@ function invoke(transport: InvokeSfioraNative, method: string, args: UTSJSONObje
         reject(invalidResponse())
         return
       }
-      if (result.getBoolean('ok') == true) {
-        resolve(result)
+      const response = result!
+      if (response.getBoolean('ok') == true) {
+        resolve(response)
         return
       }
-      const error = result.getJSON('error')
-      reject(error == null ? invalidResponse() : new SfioraError(error))
+      const error = response.getJSON('error')
+      reject(error == null ? invalidResponse() : new SfioraError(error!))
     })
   })
 }
@@ -53,7 +54,7 @@ export function invokeObject(transport: InvokeSfioraNative, method: string, args
         reject(invalidResponse())
         return
       }
-      resolve(data)
+      resolve(data!)
     })
   })
 }
@@ -66,7 +67,7 @@ export function invokeBoolean(transport: InvokeSfioraNative, method: string): Pr
         reject(invalidResponse())
         return
       }
-      resolve(data)
+      resolve(data!)
     })
   })
 }

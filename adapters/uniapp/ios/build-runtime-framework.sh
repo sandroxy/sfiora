@@ -52,6 +52,13 @@ if [[ ! -d "${adapter_framework}" ]]; then
     exit 1
 fi
 
+module_directory="${adapter_framework}/Modules/SfioraUniRuntime.swiftmodule"
+if [[ ! -f "${module_directory}/arm64-apple-ios.swiftinterface" ]]; then
+    echo "The UniApp adapter Swift module interface is missing." >&2
+    exit 1
+fi
+# Distribute stable interfaces, without compiler-specific module cache paths.
+find "${module_directory}" -type f -name '*.swiftmodule' -delete
 find "${adapter_framework}" -name '*.swiftsourceinfo' -delete
 xcrun strip -S "${adapter_framework}/SfioraUniRuntime"
 string_audit="${build_root}/SfioraUniRuntime.strings"
