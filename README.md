@@ -4,10 +4,9 @@ Sfiora is a contract-first NFC reader and writer for Android, iOS, React
 Native, classic UniApp, UNI UTS, and uni-app x. Every adapter uses the same
 native Android and iOS cores and the same structured bridge contract.
 
-Sfiora 1.0.0 is currently an unpublished release target. The coordinates below
-are the intended public coordinates, not a claim that a stable package already
-exists. Maintainers should follow [RELEASING.md](RELEASING.md); consumers should
-wait for an immutable public Release.
+Choose a published version from the [public Releases](https://github.com/sandroxy/sfiora/releases)
+and use the matching packages below. Maintainers should follow
+[RELEASING.md](RELEASING.md).
 
 ## Capabilities
 

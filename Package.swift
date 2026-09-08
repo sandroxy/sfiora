@@ -7,7 +7,7 @@ let sfioraReleaseBaseURL =
     "https://github.com/sandroxy/sfiora/releases/download/\(sfioraVersion)"
 let sfioraBinaryURL = "\(sfioraReleaseBaseURL)/sfiora-\(sfioraVersion).xcframework.zip"
 let sfioraBinaryChecksum =
-    "b41f73f040569923ee160b03a3cebfdfc04b13c82f57235c454f30fa8052e71f"
+    "ccd699da75ad342600c6a3562a223b20e02c9af1b0f0690379ef51c8f2d21cf6"
 
 let package = Package(
     name: "Sfiora",

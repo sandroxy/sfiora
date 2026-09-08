@@ -144,14 +144,14 @@ cp "${script_dir}/fixtures/ios-core-adapter-api.swift" "${consumer_source}"
 
 device_sdk="$(xcrun --sdk iphoneos --show-sdk-path)"
 simulator_sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"
-xcrun --sdk iphoneos swiftc -emit-executable \
+xcrun --sdk iphoneos swiftc -warnings-as-errors -emit-executable \
     -target "arm64-apple-ios${sfiora_ios_minimum}" \
     -sdk "${device_sdk}" \
     -F "$(dirname "${device_framework}")" \
     -framework Sfiora \
     "${consumer_source}" \
     -o "${temporary_dir}/SfioraDeviceConsumer"
-xcrun --sdk iphonesimulator swiftc -emit-executable \
+xcrun --sdk iphonesimulator swiftc -warnings-as-errors -emit-executable \
     -target "arm64-apple-ios${sfiora_ios_minimum}-simulator" \
     -sdk "${simulator_sdk}" \
     -F "$(dirname "${simulator_framework}")" \

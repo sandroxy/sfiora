@@ -12,6 +12,7 @@ func verifySfioraPublicApi() throws {
     client.stateChangeHandler = { state in
         switch state {
         case .idle, .reading, .writing: break
+        @unknown default: break
         }
     }
     let marker = try NdefExternalType(domain: "example.org", type: "sample")
