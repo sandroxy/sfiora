@@ -15,18 +15,20 @@ let package = Package(
         )
     ],
     dependencies: [
-        .package(name: "SfioraSource", path: "../../../native/ios")
+        .package(name: "SfioraSource", path: "../../native/ios")
     ],
     targets: [
         .target(
             name: "SfioraBridgeSupport",
             dependencies: [
                 .product(name: "Sfiora", package: "SfioraSource")
-            ]
+            ],
+            path: "ios/Sources/SfioraBridgeSupport"
         ),
         .testTarget(
             name: "SfioraBridgeSupportTests",
-            dependencies: ["SfioraBridgeSupport"]
+            dependencies: ["SfioraBridgeSupport"],
+            path: "ios/Tests/SfioraBridgeSupportTests"
         ),
     ],
     swiftLanguageVersions: [.v5]

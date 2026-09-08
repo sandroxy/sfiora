@@ -79,12 +79,12 @@ jobs:
       - name: Check Swift formatting
         run: >-
           xcrun swift-format lint --strict --recursive
-          Package.swift native/ios/Sources tests/ios
-          adapters/shared/ios/Sources adapters/shared/ios/Tests
+          Package.swift native/ios/Package.swift native/ios/Sources tests/ios
+          adapters/shared/Package.swift adapters/shared/ios/Sources adapters/shared/ios/Tests
       - name: Test canonical iOS source
         run: ./scripts/test-native-ios-source.sh
       - name: Test shared iOS bridge
-        working-directory: adapters/shared/ios
+        working-directory: adapters/shared
         run: swift test -Xswiftc -warnings-as-errors
       - name: Build for iOS Simulator
         run: >-

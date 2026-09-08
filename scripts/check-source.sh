@@ -18,7 +18,7 @@ ruby scripts/test-maven-signatures.rb
 if command -v xcrun >/dev/null 2>&1; then
     xcrun swift-format lint --strict --recursive \
         Package.swift native/ios/Package.swift native/ios/Sources tests/ios scripts/fixtures \
-        adapters/shared/ios/Package.swift adapters/shared/ios/Sources adapters/shared/ios/Tests
+        adapters/shared/Package.swift adapters/shared/ios/Sources adapters/shared/ios/Tests
     plutil -lint native/ios/Sfiora.xcodeproj/project.pbxproj \
         adapters/uniapp/ios/SfioraUniApp.xcodeproj/project.pbxproj \
         adapters/uniapp/ios/SfioraUniRuntime.xcodeproj/project.pbxproj >/dev/null
