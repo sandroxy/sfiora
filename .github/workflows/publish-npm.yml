@@ -1,0 +1,108 @@
+name: Publish npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable Sfiora version attached to a public GitHub Release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Validate release version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Only stable release versions are supported." >&2
+            exit 1
+          fi
+
+      - name: Check out publication tools
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: verifier
+          persist-credentials: false
+
+      - name: Check out the accepted release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.version }}
+          path: release-source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download accepted Release files and public Maven cores
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,tagName \
+            | jq -e --arg version "$VERSION" \
+              '.isDraft == false and .isPrerelease == false and .tagName == $version' >/dev/null
+          mkdir -p dist
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "sandrox-sfiora-$VERSION.tgz" \
+            --pattern "sandrox-sfiora-$VERSION.tgz.sha256" \
+            --pattern "sfiora-native-$VERSION.json" \
+            --pattern "sfiora-$VERSION.xcframework.zip" --dir dist
+          for artifact in sfiora sfiora-ui; do
+            curl --fail --location --retry 20 --retry-all-errors --retry-delay 15 \
+              --output "dist/$artifact-$VERSION.aar" \
+              "https://repo1.maven.org/maven2/io/github/sandroxy/$artifact/$VERSION/$artifact-$VERSION.aar"
+          done
+
+      - name: Verify exact npm payload, release source and native provenance
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 verifier/.github/scripts/verify-release-assets.py \
+            --version "$VERSION" --source release-source --artifacts dist --channel npm
+
+      - name: Set up Node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org/
+          package-manager-cache: false
+
+      - name: Use the verified OIDC-capable npm client
+        run: npm install --global npm@11.17.0 --registry https://registry.npmjs.org/
+
+      - name: Confirm the npm version is unused
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set +e
+          output=$(npm view "@sandrox/sfiora@$VERSION" version --registry https://registry.npmjs.org/ 2>&1)
+          status=$?
+          set -e
+          if [[ $status -eq 0 ]]; then
+            echo "@sandrox/sfiora@$VERSION is already published." >&2
+            exit 1
+          fi
+          if ! grep -q 'E404' <<<"$output"; then
+            echo "Could not prove that the npm version is unused:" >&2
+            printf '%s\n' "$output" >&2
+            exit 1
+          fi
+
+      - name: Publish the verified tarball through Trusted Publishing
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          npm publish "./dist/sandrox-sfiora-$VERSION.tgz" \
+            --access public --ignore-scripts --provenance --registry https://registry.npmjs.org/

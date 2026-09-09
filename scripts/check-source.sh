@@ -13,6 +13,7 @@ for path in scripts/*.sh adapters/uniapp/ios/*.sh; do bash -n "${path}"; done
 ruby scripts/test-release-policy.rb
 ruby scripts/test-adapter-provenance.rb
 ruby scripts/test-publish-candidate.rb
+python3 .github/scripts/test-release-assets.py
 ruby scripts/test-native-artifact-reuse.rb
 ruby scripts/test-maven-signatures.rb
 if command -v xcrun >/dev/null 2>&1; then

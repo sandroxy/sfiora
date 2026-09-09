@@ -4,6 +4,10 @@ Sfiora separates a product version from the identity of one concrete build.
 `plugin.json` declares the next product version. A version is not stable until
 its exact public files are locked by the consumer repository after publication.
 
+Use the browser for GitHub Release uploads, manual workflow runs, and Central
+Portal publication. HBuilderX publishes the accepted UTS module. Local `gh`
+installation and a Central API token are not required for these routes.
+
 ## Release states
 
 - Platform directories under `dist/` contain the release files. Their
@@ -14,9 +18,11 @@ its exact public files are locked by the consumer repository after publication.
 - Clean, signed output with verified provenance has state `candidate`.
   A dirty, unsigned, or unpromoted iOS build uses the same manifest with state
   `rehearsal`; it can test the pipeline but cannot be accepted or published.
-- A public stable release exists only after those exact candidate bytes are
-  published. The separate `integrated-plugins` repository then pins their
-  public URLs and hashes in `verification/stable-lock.json`.
+- A public stable release exists only after the channel-specific artifacts below
+  are published with the accepted bytes. The full candidate also includes local
+  verification files; it is not a GitHub upload list. The separate
+  `integrated-plugins` repository then pins their public URLs and hashes in
+  `verification/stable-lock.json`.
 
 Never use a bare version number to choose local bytes and never overwrite a
 published version. Rebuilding a rejected, still-unpublished version replaces
@@ -152,8 +158,10 @@ git tag -a "<version>" -m "Sfiora <version>"
 
 The gate requires a clean worktree, an annotated version tag pointing to the
 candidate source commit, a clean accepted verifier receipt, and byte-for-byte
-matching artifacts. Upload or publish only the paths printed by the gate.
-`publish-accepted.rb` repeats this gate immediately before each channel operation:
+matching artifacts. Its output lists the full accepted set across all channels.
+`publish-accepted.rb` repeats this gate and prints only the selected channel's
+files and manual steps. It does not upload, publish, authenticate, install tools,
+or require a Central API token:
 
 ```sh
 ./scripts/publish-accepted.rb \
@@ -163,16 +171,95 @@ matching artifacts. Upload or publish only the paths printed by the gate.
 # Other channels: npm, maven, uniapp.
 ```
 
-Push the annotated tag before GitHub publication. Maven requires
-`SFIORA_CENTRAL_TOKEN` and final publication of the validated deployment in the
-Central portal. The `uniapp` channel identifies the accepted UTS archive and
-its HBuilderX publication route: open the existing consumer project that
-installed this archive, right-click `uni_modules/Sandrox-Sfiora`, and choose
-**发布到插件市场**. Use the packaged `readme.md`; no second manual copy is needed.
-Keep executable files unchanged through publication. HBuilderX may write back
-market metadata and changelog dates. Verify the public installation separately
-in the test repository. The legacy ZIP is a compatibility/offline artifact.
-Attach both accepted ZIPs to the canonical GitHub Release without repacking.
+If publication tools change after the tag was pushed, keep the tag, candidate,
+receipt, and packaged files unchanged. Run the updated tools with `--source`
+pointing to a separate clean checkout of that tag. For example:
+
+```sh
+git worktree add --detach /absolute/path/to/release-source "<version>"
+./scripts/publish-accepted.rb \
+  --source /absolute/path/to/release-source \
+  --candidate /absolute/path/to/candidate.json \
+  --acceptance /absolute/path/to/accepted-receipt.json \
+  --channel github
+```
+
+The selected source must still be clean, with HEAD and the annotated tag both
+equal to the accepted candidate commit. `--source` also applies to
+`verify-publish-candidate.rb`; it does not waive source or artifact checks.
+Remove the temporary checkout when it is no longer needed.
+
+### GitHub Release
+
+Push the annotated tag, then create its Release in the browser. Use a short
+consumer-facing summary and link to the tag's `CHANGELOG.md`. Upload these eight
+accepted files initially:
+
+- `sfiora-<version>.xcframework.zip`
+- `sfiora-native-<version>.json`
+- `sandrox-sfiora-<version>.tgz` and its `.sha256`
+- `sfiora-uniapp-<version>.zip` and its `.sha256`
+- `sfiora-uniapp-uts-<version>.zip` and its `.sha256`
+
+The local Maven ZIP goes to Central Portal. Android AARs and their sidecars are
+added by the mirror workflow after Maven Central publication. The XCFramework
+sidecar and native `SHA256SUMS` remain local verification files; the public
+native JSON and Swift Package already pin the relevant hashes. Do not upload
+the full `dist/` directory or mistake candidate roles for channel destinations.
+
+### Android / Maven Central
+
+In Central Portal, upload the accepted `sfiora-<version>-maven.zip` in
+user-managed mode and use `sfiora-<version>` as the Deployment Name. The bundle
+contains the signed `io.github.sandroxy:sfiora` and `io.github.sandroxy:sfiora-ui`
+publications. Publish after portal validation; do not rebuild or re-sign it.
+
+After both coordinates are publicly available, run **Mirror Android AAR** from
+the updated default branch with the release `version`. It checks out that
+annotated tag, downloads both AARs from Maven Central, verifies their sizes and
+SHA-256 against the accepted native JSON, and attaches both AARs and sidecars to
+the public Release. It refuses existing asset names and never replaces files.
+If a run is interrupted, inspect the existing mirrors before retrying.
+
+### React Native / npm
+
+After the GitHub Release and Maven Central publications are available, configure
+the npm package's Trusted Publisher for GitHub Actions: owner `sandroxy`,
+repository `sfiora`, workflow filename `publish-npm.yml`, with direct
+`npm publish` allowed. See the [npm configuration guide](https://docs.npmjs.com/trusted-publishers/).
+
+Run **Publish npm** from the updated default branch with the release `version`.
+The workflow downloads the accepted tarball, sidecar, native JSON and iOS ZIP
+from GitHub, and both native Android AARs from Central. It checks the canonical
+tag, packaged source, complete file set, embedded native bytes, and iOS source
+provenance before publishing that same tarball through OIDC. It rejects an
+already published version and does not rebuild or run package lifecycle hooks.
+
+For a new package that has no npm settings page yet, use the existing
+interactive npm login to publish the same accepted tarball once; the `npm`
+channel prints that exact command. Then configure Trusted Publishing for later
+versions. Never publish a placeholder package or try to publish the initial
+version again. Credentials stay in the normal npm authentication flow.
+
+### UniApp / DCloud
+
+Open the existing consumer project that installed the accepted UTS archive,
+right-click `uni_modules/Sandrox-Sfiora`, and choose **发布到插件市场**. Use the
+packaged `readme.md`; no second manual copy is needed. Keep executable files
+unchanged. HBuilderX may write back market metadata and changelog dates. Verify
+the public Marketplace installation separately in the test repository. The
+legacy ZIP remains a compatibility/offline artifact.
+
+Run **Verify UniApp Release Assets** from the updated default branch with the
+release `version` and the accepted `uts_sha256` and `legacy_sha256` printed by
+the `uniapp` channel. It verifies both GitHub ZIPs and their embedded native
+bytes against the public native artifacts, without rebuilding or changing
+files. This checks the GitHub mirrors; it does not certify DCloud's normalized
+Marketplace installation.
+
+All three workflows are explicitly manual. Publishing a GitHub Release does
+not automatically publish to another channel. Workflow-only corrections can
+run from the updated default branch while keeping the release tag unchanged.
 
 After every public channel is available, update the Sfiora entry in
 `integrated-plugins/verification/stable-lock.json` with the public URLs, byte

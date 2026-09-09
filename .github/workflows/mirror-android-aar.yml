@@ -1,0 +1,92 @@
+name: Mirror Android AAR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable Sfiora version already published to Maven Central
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mirror-android-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Validate release version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Only stable release versions are supported." >&2
+            exit 1
+          fi
+
+      - name: Check out publication tools
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: verifier
+          persist-credentials: false
+
+      - name: Check out the accepted release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.version }}
+          path: release-source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download accepted metadata and both Maven Central AARs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,tagName \
+            | jq -e --arg version "$VERSION" \
+              '.isDraft == false and .isPrerelease == false and .tagName == $version' >/dev/null
+          mkdir -p dist
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "sfiora-native-$VERSION.json" --dir dist
+          for artifact in sfiora sfiora-ui; do
+            curl --fail --location --retry 20 --retry-all-errors --retry-delay 15 \
+              --output "dist/$artifact-$VERSION.aar" \
+              "https://repo1.maven.org/maven2/io/github/sandroxy/$artifact/$VERSION/$artifact-$VERSION.aar"
+          done
+
+      - name: Verify the accepted core and UI bytes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          python3 verifier/.github/scripts/verify-release-assets.py \
+            --version "$VERSION" --source release-source --artifacts dist --channel android
+          (
+            cd dist
+            sha256sum "sfiora-$VERSION.aar" > "sfiora-$VERSION.aar.sha256"
+            sha256sum "sfiora-ui-$VERSION.aar" > "sfiora-ui-$VERSION.aar.sha256"
+          )
+
+      - name: Attach verified offline mirrors without replacing existing files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name' > existing-assets.txt
+          for artifact in "sfiora-$VERSION.aar" "sfiora-$VERSION.aar.sha256" \
+            "sfiora-ui-$VERSION.aar" "sfiora-ui-$VERSION.aar.sha256"; do
+            if grep -Fxq "$artifact" existing-assets.txt; then
+              echo "Release already contains $artifact; inspect it without replacing public bytes." >&2
+              exit 1
+            fi
+          done
+          gh release upload "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            "dist/sfiora-$VERSION.aar" "dist/sfiora-$VERSION.aar.sha256" \
+            "dist/sfiora-ui-$VERSION.aar" "dist/sfiora-ui-$VERSION.aar.sha256"

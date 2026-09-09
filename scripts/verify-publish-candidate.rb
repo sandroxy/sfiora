@@ -12,9 +12,10 @@ require_relative "native-release-manifest"
 
 options = {}
 OptionParser.new do |parser|
-  parser.banner = "Usage: verify-publish-candidate.rb --candidate FILE --acceptance FILE"
+  parser.banner = "Usage: verify-publish-candidate.rb --candidate FILE --acceptance FILE [--source DIR]"
   parser.on("--candidate FILE") { |value| options[:candidate] = value }
   parser.on("--acceptance FILE") { |value| options[:acceptance] = value }
+  parser.on("--source DIR", "Clean checkout of the accepted release tag") { |value| options[:source] = value }
   parser.on("-h", "--help") { puts parser; exit }
 end.parse!
 
@@ -23,7 +24,7 @@ missing = required.reject { |key| options[key] && !options[key].empty? }
 abort("Missing required options: #{missing.join(", ")}") unless missing.empty?
 abort("Unexpected arguments: #{ARGV.join(" ")}") unless ARGV.empty?
 
-root = Pathname.new(__dir__).parent.realpath
+root = Pathname.new(options.fetch(:source, File.expand_path("..", __dir__))).realpath
 begin
   release_policy = ReleasePolicy.load(root.join("release-policy.json"))
 rescue ReleasePolicy::Error => error
@@ -216,6 +217,7 @@ abort("Unable to resolve canonical tag #{version}") unless status.success?
 abort("Canonical tag #{version} does not point to the accepted source commit") unless tag_commit.strip == commit
 
 puts "Verified checks and artifacts for #{plugin} #{version}: #{expected_candidate_id}."
+puts "Full accepted set; use publish-accepted.rb --channel for destination-specific publication steps."
 entries.sort_by { |entry| entry.fetch("role") }.each do |entry|
   puts "#{entry.fetch("role")}=#{candidate_root.join(entry.fetch("file"))}"
 end

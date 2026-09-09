@@ -1,0 +1,90 @@
+name: Verify UniApp Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Stable Sfiora release containing both accepted UNI archives
+        required: true
+        type: string
+      uts_sha256:
+        description: Accepted SHA-256 of the UTS archive (classic uni-app and uni-app x)
+        required: true
+        type: string
+      legacy_sha256:
+        description: Accepted SHA-256 of the legacy archive
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - name: Validate release version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Only stable release versions are supported." >&2
+            exit 1
+          fi
+      - name: Validate accepted checksums
+        env:
+          UTS_SHA256: ${{ inputs.uts_sha256 }}
+          LEGACY_SHA256: ${{ inputs.legacy_sha256 }}
+        run: |
+          if [[ ! "$UTS_SHA256" =~ ^[0-9a-f]{64}$ || ! "$LEGACY_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Both accepted UNI checksums are required." >&2
+            exit 1
+          fi
+
+      - name: Check out publication tools
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          path: verifier
+          persist-credentials: false
+
+      - name: Check out the accepted release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.version }}
+          path: release-source
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download accepted UNI mirrors and public native artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease,tagName \
+            | jq -e --arg version "$VERSION" \
+              '.isDraft == false and .isPrerelease == false and .tagName == $version' >/dev/null
+          mkdir -p dist
+          gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --pattern "sfiora-uniapp-$VERSION.zip" \
+            --pattern "sfiora-uniapp-$VERSION.zip.sha256" \
+            --pattern "sfiora-uniapp-uts-$VERSION.zip" \
+            --pattern "sfiora-uniapp-uts-$VERSION.zip.sha256" \
+            --pattern "sfiora-native-$VERSION.json" \
+            --pattern "sfiora-$VERSION.xcframework.zip" --dir dist
+          for artifact in sfiora sfiora-ui; do
+            curl --fail --location --retry 20 --retry-all-errors --retry-delay 15 \
+              --output "dist/$artifact-$VERSION.aar" \
+              "https://repo1.maven.org/maven2/io/github/sandroxy/$artifact/$VERSION/$artifact-$VERSION.aar"
+          done
+
+      - name: Verify accepted UNI bytes and embedded native provenance
+        env:
+          VERSION: ${{ inputs.version }}
+          UTS_SHA256: ${{ inputs.uts_sha256 }}
+          LEGACY_SHA256: ${{ inputs.legacy_sha256 }}
+        run: |
+          python3 verifier/.github/scripts/verify-release-assets.py \
+            --version "$VERSION" --source release-source --artifacts dist --channel uniapp \
+            --uts-sha256 "$UTS_SHA256" --legacy-sha256 "$LEGACY_SHA256"

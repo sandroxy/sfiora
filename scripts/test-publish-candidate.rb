@@ -123,13 +123,14 @@ class PublishCandidateTest < Minitest::Test
     run["runSha256"] = Digest::SHA256.hexdigest(JSON.pretty_generate(original) + "\n")
   end
 
-  def run_gate(publisher: false)
+  def run_gate(publisher: false, channel: "uniapp", source: nil)
     @receipt_path.write(JSON.pretty_generate(@receipt) + "\n")
     script = publisher ? "publish-accepted.rb" : "verify-publish-candidate.rb"
     command = [RbConfig.ruby, @product.join("scripts", script).to_s,
       "--candidate", @candidate_path.to_s, "--acceptance", @receipt_path.to_s]
-    command.concat(["--channel", "uniapp"]) if publisher
-    Open3.capture3(*command)
+    command.concat(["--channel", channel]) if publisher
+    command.concat(["--source", source.to_s]) if source
+    Open3.capture3({"SFIORA_CENTRAL_TOKEN" => nil}, *command)
   end
 
   def assert_rejected(pattern, publisher: false)
@@ -177,6 +178,85 @@ class PublishCandidateTest < Minitest::Test
     checks[target] = {"status" => "passed"}
     checks["invented-device"] = {"status" => "passed"}
     assert_rejected(/Manual acceptance targets differ/)
+  end
+
+  def test_github_instructions_only_list_the_initial_eight_assets
+    output, error, status = run_gate(publisher: true, channel: "github")
+    assert status.success?, error
+    roles = %w[native-ios-xcframework native-build-manifest react-native-package checksum-react-native-package
+               uniapp-legacy-package checksum-uniapp-legacy-package uniapp-uts-package checksum-uniapp-uts-package]
+    expected = @candidate.fetch("artifacts").select { |entry| roles.include?(entry.fetch("role")) }
+      .map { |entry| @candidate_root.join(entry.fetch("file")).realpath.to_s }
+    paths = output.lines.map(&:chomp).select { |line| line.start_with?(@candidate_root.realpath.to_s) }
+    assert_equal expected.sort, paths.sort
+    assert_includes output, "Instructions only"
+    assert_includes output, "Mirror Android AAR"
+  end
+
+  def test_maven_instructions_need_no_token_and_only_name_the_signed_bundle
+    output, error, status = run_gate(publisher: true, channel: "maven")
+    assert status.success?, error
+    paths = output.lines.map(&:chomp).select { |line| line.start_with?(@candidate_root.realpath.to_s) }
+    assert_equal [@candidate_root.join("artifacts/sfiora-1.0.0-maven.zip").realpath.to_s], paths
+    assert_includes output, "io.github.sandroxy:sfiora-ui:1.0.0"
+    assert_includes output, "user-managed"
+  end
+
+  def test_npm_instructions_do_not_attempt_authentication_or_publication
+    bin = @root.join("blocked-commands")
+    bin.mkpath
+    marker = @root.join("unexpected-publisher")
+    %w[gh npm curl].each do |name|
+      path = bin.join(name)
+      path.write("#!/bin/sh\ntouch '#{marker}'\nexit 99\n")
+      path.chmod(0755)
+    end
+    previous = ENV.fetch("PATH")
+    ENV["PATH"] = "#{bin}:#{previous}"
+    output, error, status = run_gate(publisher: true, channel: "npm")
+    assert status.success?, error
+    refute marker.exist?, "The manual publication guide invoked a publisher"
+    assert_includes output, "publish-npm.yml"
+    assert_includes output, "no npm settings page yet"
+    assert_includes output, "--ignore-scripts"
+  ensure
+    ENV["PATH"] = previous if previous
+  end
+
+  def test_updated_publication_tools_can_verify_a_separate_clean_tag_checkout
+    checkout = @root.join("release-source")
+    git("worktree", "add", "--detach", checkout.to_s, "1.0.0")
+    @product.join("publication-only.txt").write("updated workflow fixture")
+    git("add", ".")
+    git("commit", "-qm", "publication tools only")
+    output, error, status = run_gate(publisher: true, channel: "github", source: checkout)
+    assert status.success?, error
+    assert_includes output, "Verified"
+    assert_rejected(/Current source commit differs/)
+    checkout.join("dirty.txt").write("unaccepted source")
+    _output, error, status = run_gate(source: checkout)
+    refute status.success?
+    assert_match(/requires a clean source worktree/, error)
+  end
+
+  def test_public_android_mirror_verifies_both_core_and_ui_before_upload
+    public_files = @root.join("public-assets")
+    public_files.mkpath
+    roles = %w[native-android-core-aar native-android-ui-aar native-build-manifest]
+    @candidate.fetch("artifacts").select { |entry| roles.include?(entry.fetch("role")) }.each do |entry|
+      filename = entry.fetch("role") == "native-build-manifest" ? "sfiora-native-1.0.0.json" : File.basename(entry.fetch("file"))
+      FileUtils.cp(@candidate_root.join(entry.fetch("file")), public_files.join(filename))
+    end
+    command = ["python3", File.expand_path("../.github/scripts/verify-release-assets.py", __dir__),
+      "--version", "1.0.0", "--source", @product.to_s, "--artifacts", public_files.to_s, "--channel", "android"]
+    output, error, status = Open3.capture3(*command)
+    assert status.success?, error
+    assert_includes output, "Verified public android"
+    ui = public_files.join("sfiora-ui-1.0.0.aar")
+    ui.binwrite("x" * ui.size)
+    _output, error, status = Open3.capture3(*command)
+    refute status.success?
+    assert_match(/Native artifact bytes differ: sfiora-ui/, error)
   end
 
   def test_publisher_runs_the_gate_before_reporting_upload_paths
