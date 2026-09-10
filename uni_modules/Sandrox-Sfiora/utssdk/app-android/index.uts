@@ -1,8 +1,8 @@
 import {
   InvokeSfioraNative, SfioraNativeCallback, GetCapabilities, StartScan,
-  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting,
+  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting, WaitForIdle,
 } from '../interface.uts'
-import { invokeObject, invokeBoolean, invokeVoid } from '../bridge.uts'
+import { invokeObject, invokeBoolean, invokeVoid, waitForNativeIdle } from '../bridge.uts'
 export { SfioraError } from '../bridge.uts'
 import SfioraBridgeRuntime from 'com.sandrox.sfiora.bridge.SfioraBridgeRuntime'
 import SfioraBridgeJsonCallback from 'com.sandrox.sfiora.bridge.SfioraBridgeJsonCallback'
@@ -56,4 +56,8 @@ export const cancelWrite: CancelWrite = function(): Promise<void> {
 }
 export const isWriting: IsWriting = function(): Promise<boolean> {
   return invokeBoolean(invokeSfioraNative, 'isWriting')
+}
+
+export const waitForIdle: WaitForIdle = function(options?: UTSJSONObject): Promise<void> {
+  return waitForNativeIdle(invokeSfioraNative, options)
 }

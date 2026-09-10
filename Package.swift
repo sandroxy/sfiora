@@ -2,6 +2,8 @@
 
 import PackageDescription
 
+// Published binary pin. Advance with the checksum of the next clean archive
+// during the two-commit release handoff; source development uses native/ios.
 let sfioraVersion = "1.0.0"
 let sfioraReleaseBaseURL =
     "https://github.com/sandroxy/sfiora/releases/download/\(sfioraVersion)"

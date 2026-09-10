@@ -9,3 +9,4 @@ export type WriteNdef = (message: UTSJSONObject, options?: UTSJSONObject) => Pro
 export type InitializeNdef = (message: UTSJSONObject, marker: UTSJSONObject, options?: UTSJSONObject) => Promise<UTSJSONObject>
 export type CancelWrite = () => Promise<void>
 export type IsWriting = () => Promise<boolean>
+export type WaitForIdle = (options?: UTSJSONObject) => Promise<void>

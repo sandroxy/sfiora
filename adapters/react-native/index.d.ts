@@ -73,3 +73,12 @@ export function initializeNdef(
 ): Promise<NfcNdefInitializationResult>;
 export function cancelWrite(): Promise<void>;
 export function isWriting(): Promise<boolean>;
+
+export interface NfcWaitForIdleOptions {
+  /** Integer 1–60000; default 5000 milliseconds. */
+  timeoutMilliseconds?: number;
+}
+/** Wait for this bridge's session to close. Does not cancel it or reserve the next session.
+ * Rejects with SESSION_CLOSE_TIMEOUT on deadline; native busy state is unchanged.
+ */
+export function waitForIdle(options?: NfcWaitForIdleOptions): Promise<void>;

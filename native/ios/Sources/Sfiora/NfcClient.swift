@@ -10,6 +10,18 @@ public enum NfcClientState: String, Equatable, Sendable {
     import CoreNFC
     import UIKit
 
+    /// OS boundary for deterministic session tests; the public initializer uses live services.
+    struct NfcClientEnvironment {
+        var capabilities: () -> NfcCapabilities = { .current }
+        var applicationIsActive: () -> Bool = { UIApplication.shared.applicationState == .active }
+        var makeTagSession:
+            (
+                NFCTagReaderSession.PollingOption, NFCTagReaderSessionDelegate, DispatchQueue
+            ) -> NFCTagReaderSession? = {
+                NFCTagReaderSession(pollingOption: $0, delegate: $1, queue: $2)
+            }
+    }
+
     private final class NfcCompatibilitySessionDelegate: NSObject,
         NFCNDEFReaderSessionDelegate
     {
@@ -203,6 +215,7 @@ public enum NfcClientState: String, Equatable, Sendable {
 
     /// Executes one foreground NFC read or write operation at a time.
     public final class NfcClient: NSObject {
+        private let environment: NfcClientEnvironment
         private let observableStateLock = NSLock()
         private var observableOperationKind: NfcOperationKind?
         private var observableStateHandler: ((NfcClientState) -> Void)?
@@ -212,6 +225,7 @@ public enum NfcClientState: String, Equatable, Sendable {
         private var operationLease: NfcOperationLease?
         private var activeSession: NfcActiveSession?
         private var lifecycle = NfcSessionLifecycle<NfcClientCompletion>()
+        private var invalidationDeadlineWorkItem: DispatchWorkItem?
         private var operationTimeoutWorkItem: DispatchWorkItem?
         private var activationTimeoutWorkItem: DispatchWorkItem?
         private var recoveryWorkItem: DispatchWorkItem?
@@ -225,7 +239,12 @@ public enum NfcClientState: String, Equatable, Sendable {
         private var writeVerified = false
         private var applicationObservers: [NSObjectProtocol] = []
 
-        public override init() {
+        public override convenience init() {
+            self.init(environment: NfcClientEnvironment())
+        }
+
+        init(environment: NfcClientEnvironment) {
+            self.environment = environment
             super.init()
             observeApplicationLifecycle()
         }
@@ -239,7 +258,7 @@ public enum NfcClientState: String, Equatable, Sendable {
             NfcOperationCoordinator.release(operationLease)
         }
 
-        public var capabilities: NfcCapabilities { .current }
+        public var capabilities: NfcCapabilities { environment.capabilities() }
 
         public var state: NfcClientState {
             observableStateLock.lock()
@@ -254,6 +273,8 @@ public enum NfcClientState: String, Equatable, Sendable {
         /// Receives state changes on the main thread. Terminal callbacks are
         /// delivered after `.idle`, except successful Core NFC results: those
         /// are delivered immediately while the system panel is dismissing.
+        /// A closing failure/cancellation may complete after a five-second grace
+        /// period while state remains busy until Core NFC confirms invalidation.
         public var stateChangeHandler: ((NfcClientState) -> Void)? {
             get {
                 observableStateLock.lock()
@@ -350,6 +371,7 @@ public enum NfcClientState: String, Equatable, Sendable {
                 guard self.request != nil else {
                     return
                 }
+                _ = self.lifecycle.takeInvalidatingCompletion()
                 self.finish(.silent)
             }
         }
@@ -394,8 +416,7 @@ public enum NfcClientState: String, Equatable, Sendable {
             activeTimeBudget = NfcActiveTimeBudget(
                 milliseconds: newRequest.timeoutMilliseconds
             )
-            applicationIsActive =
-                UIApplication.shared.applicationState == .active
+            applicationIsActive = environment.applicationIsActive()
             let identifier = operationIdentifier
             let decision = lifecycle.begin(
                 applicationIsActive: applicationIsActive
@@ -453,10 +474,8 @@ public enum NfcClientState: String, Equatable, Sendable {
                 case .automatic, .discover:
                     let proxy = NfcTagSessionDelegate(owner: self)
                     guard
-                        let session = NFCTagReaderSession(
-                            pollingOption: pollingOptions(configuration.pollingTechnologies),
-                            delegate: proxy,
-                            queue: .main
+                        let session = environment.makeTagSession(
+                            pollingOptions(configuration.pollingTechnologies), proxy, .main
                         )
                     else {
                         lifecycle.abortStart()
@@ -631,6 +650,7 @@ public enum NfcClientState: String, Equatable, Sendable {
             }
 
             cancelSessionWorkItems()
+            scheduleInvalidationDeadline()
             if let alertMessage {
                 activeSession.setAlertMessage(alertMessage)
             }
@@ -660,8 +680,7 @@ public enum NfcClientState: String, Equatable, Sendable {
             guard activeSession != nil else {
                 return
             }
-            applicationIsActive =
-                UIApplication.shared.applicationState == .active
+            applicationIsActive = environment.applicationIsActive()
             let nativeError = error as NSError
             let fallback: NfcClientCompletion
             if nativeError.domain == NFCErrorDomain,
@@ -718,7 +737,43 @@ public enum NfcClientState: String, Equatable, Sendable {
                 return
             }
             cancelSessionWorkItems()
+            scheduleInvalidationDeadline()
             activeSession.invalidate(errorMessage: nil)
+        }
+
+        private func scheduleInvalidationDeadline() {
+            guard let identifier = operationIdentifier else { return }
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self,
+                    self.operationIdentifier == identifier,
+                    let request = self.request,
+                    let pending = self.lifecycle.takeInvalidatingCompletion()
+                else { return }
+                self.invalidationDeadlineWorkItem = nil
+                let completion: NfcClientCompletion
+                switch pending {
+                case .retry:
+                    completion = .failure(
+                        NfcError(
+                            code: .sessionCloseTimeout,
+                            message:
+                                "Core NFC did not finish closing its session; NFC remains busy",
+                            recoverable: true
+                        ))
+                case .failure(let error):
+                    completion = .failure(
+                        error.acknowledgingUnverifiedWrite(
+                            commandStarted: self.writeCommandStarted, verified: self.writeVerified
+                        ))
+                default:
+                    completion = pending
+                }
+                // The late invalidation delegate still owns resource/lease release.
+                // In particular, do not report idle or start recovery here.
+                self.deliver(request: request, completion: completion)
+            }
+            invalidationDeadlineWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(5), execute: workItem)
         }
 
         private func releaseActiveSession(preserveRequest: Bool) {
@@ -755,8 +810,7 @@ public enum NfcClientState: String, Equatable, Sendable {
                     return
                 }
                 self.recoveryWorkItem = nil
-                self.applicationIsActive =
-                    UIApplication.shared.applicationState == .active
+                self.applicationIsActive = self.environment.applicationIsActive()
                 self.resumeWaitingRequestIfPossible()
             }
             recoveryWorkItem = workItem
@@ -813,6 +867,8 @@ public enum NfcClientState: String, Equatable, Sendable {
         }
 
         private func cancelSessionWorkItems() {
+            invalidationDeadlineWorkItem?.cancel()
+            invalidationDeadlineWorkItem = nil
             if var budget = activeTimeBudget {
                 budget.pause(
                     atUptimeNanoseconds: DispatchTime.now().uptimeNanoseconds
@@ -956,12 +1012,13 @@ public enum NfcClientState: String, Equatable, Sendable {
                     )
                     return
                 }
-                self.inspectConnectedTag(tag, configuration: configuration)
+                self.inspectConnectedTag(tag, session: session, configuration: configuration)
             }
         }
 
         private func inspectConnectedTag(
             _ tag: NFCTag,
+            session: NFCTagReaderSession,
             configuration: NfcReadConfiguration
         ) {
             do {
@@ -975,8 +1032,12 @@ public enum NfcClientState: String, Equatable, Sendable {
                     return
                 }
 
-                context.ndefTag.queryNDEFStatus { [weak self] platformStatus, capacity, error in
-                    guard let self, self.lifecycle.phase == .active else {
+                context.ndefTag.queryNDEFStatus {
+                    [weak self, weak session] platformStatus, capacity, error in
+                    guard let self, let session,
+                        self.activeSession?.matches(session) == true,
+                        self.lifecycle.phase == .active
+                    else {
                         return
                     }
                     if let error {
@@ -1007,8 +1068,12 @@ public enum NfcClientState: String, Equatable, Sendable {
                             )
                             return
                         }
-                        context.ndefTag.readNDEF { [weak self] platformMessage, error in
-                            guard let self, self.lifecycle.phase == .active else {
+                        context.ndefTag.readNDEF {
+                            [weak self, weak session] platformMessage, error in
+                            guard let self, let session,
+                                self.activeSession?.matches(session) == true,
+                                self.lifecycle.phase == .active
+                            else {
                                 return
                             }
                             if let error, !self.isZeroLengthMessage(error) {
@@ -1684,6 +1749,8 @@ public enum NfcClientState: String, Equatable, Sendable {
 
         public var capabilities: NfcCapabilities { .current }
         public var state: NfcClientState { .idle }
+        /// A closing failure/cancellation may complete after a five-second grace
+        /// period while state remains busy until Core NFC confirms invalidation.
         public var stateChangeHandler: ((NfcClientState) -> Void)?
         public var isReading: Bool { false }
         public var isWriting: Bool { false }

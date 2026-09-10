@@ -9,6 +9,7 @@ public enum NfcErrorCode: String, Equatable, Sendable {
     case userCancelled = "USER_CANCELLED"
     case scanTimeout = "SCAN_TIMEOUT"
     case writeTimeout = "WRITE_TIMEOUT"
+    case sessionCloseTimeout = "SESSION_CLOSE_TIMEOUT"
     case tagLost = "TAG_LOST"
     case unsupportedTag = "UNSUPPORTED_TAG"
     case readFailed = "READ_FAILED"

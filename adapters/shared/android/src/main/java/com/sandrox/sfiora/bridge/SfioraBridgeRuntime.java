@@ -163,7 +163,11 @@ public final class SfioraBridgeRuntime {
             return;
         }
 
-        ensureControllersFor(activity);
+        if (!ensureControllersFor(activity)) {
+            invoke(callback, failure(new NfcError(NfcErrorCode.SCAN_BUSY,
+                    "The previous NFC session is still closing", true)));
+            return;
+        }
         scanController.startScan(
                 request.getReadConfiguration(),
                 request.getPresentation(),
@@ -218,7 +222,11 @@ public final class SfioraBridgeRuntime {
             return;
         }
 
-        ensureControllersFor(activity);
+        if (!ensureControllersFor(activity)) {
+            invoke(callback, failure(new NfcError(NfcErrorCode.WRITE_BUSY,
+                    "The previous NFC session is still closing", true)));
+            return;
+        }
         writeController.startWrite(
                 request.getMessage(),
                 request.getWriteConfiguration(),
@@ -264,7 +272,11 @@ public final class SfioraBridgeRuntime {
             return;
         }
 
-        ensureControllersFor(activity);
+        if (!ensureControllersFor(activity)) {
+            invoke(callback, failure(new NfcError(NfcErrorCode.WRITE_BUSY,
+                    "The previous NFC session is still closing", true)));
+            return;
+        }
         try {
             writeController.startInitialize(
                     request.getMessage(),
@@ -308,24 +320,28 @@ public final class SfioraBridgeRuntime {
         return activity;
     }
 
-    private void ensureControllersFor(Activity activity) {
+    private boolean ensureControllersFor(Activity activity) {
         Activity controllerActivity = controllerActivityRef.get();
         if (scanController != null
                 && writeController != null
                 && controllerActivity == activity) {
-            return;
+            return true;
         }
         releaseControllers(true);
+        if ((scanController != null && scanController.isScanning())
+                || (writeController != null && writeController.isWriting())) {
+            return false;
+        }
         scanController = new NfcScanController(activity);
         writeController = new NfcWriteController(activity);
         controllerActivityRef = new WeakReference<>(activity);
+        return true;
     }
 
     private void releaseControllers(boolean reportCancellation) {
         NfcScanController currentScanController = scanController;
         NfcWriteController currentWriteController = writeController;
-        scanController = null;
-        writeController = null;
+        // State queries must include controllers whose native cleanup is pending.
         controllerActivityRef.clear();
         if (currentScanController != null) {
             if (reportCancellation && currentScanController.isScanning()) {

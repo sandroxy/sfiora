@@ -7,6 +7,8 @@ import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.UiThreadUtil;
+import com.facebook.react.common.LifecycleState;
 import com.sandrox.sfiora.NdefExternalType;
 import com.sandrox.sfiora.NfcCapabilities;
 import com.sandrox.sfiora.NfcClient;
@@ -35,161 +37,58 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
 
     SfioraModuleDelegate(ReactApplicationContext reactContext) {
         this.reactContext = reactContext;
-        reactContext.addLifecycleEventListener(this);
+        UiThreadUtil.runOnUiThread(() -> reactContext.addLifecycleEventListener(this));
     }
 
     void getCapabilities(Promise promise) {
-        if (invalidated) {
-            reject(promise, internalError("The NFC bridge has been invalidated"));
-            return;
-        }
-        NfcCapabilities capabilities = NfcCapabilities.from(reactContext);
-        promise.resolve(Arguments.makeNativeMap(capabilities.toMap()));
+        UiThreadUtil.runOnUiThread(() -> {
+            if (invalidated) {
+                reject(promise, internalError("The NFC bridge has been invalidated"));
+                return;
+            }
+            NfcCapabilities capabilities = NfcCapabilities.from(reactContext);
+            promise.resolve(Arguments.makeNativeMap(capabilities.toMap()));
+        });
     }
 
     void startScan(ReadableMap options, Promise promise) {
-        if (invalidated) {
-            reject(promise, internalError("The NFC bridge has been invalidated"));
-            return;
-        }
+        UiThreadUtil.runOnUiThread(() -> {
+            if (invalidated) {
+                reject(promise, internalError("The NFC bridge has been invalidated"));
+                return;
+            }
 
-        final SfioraBridgeOptions bridgeOptions;
-        try {
-            bridgeOptions = SfioraBridgeOptions.parse(
-                    options == null ? null : options.toHashMap()
-            );
-        } catch (SfioraBridgeOptionsException error) {
-            reject(promise, invalidOptions(error));
-            return;
-        }
+            final SfioraBridgeOptions bridgeOptions;
+            try {
+                bridgeOptions = SfioraBridgeOptions.parse(
+                        options == null ? null : options.toHashMap()
+                );
+            } catch (SfioraBridgeOptionsException error) {
+                reject(promise, invalidOptions(error));
+                return;
+            }
 
-        Activity activity = availableActivity();
-        if (activity == null) {
-            reject(promise, internalError("The host Activity is not available"));
-            return;
-        }
+            Activity activity = availableActivity();
+            if (activity == null) {
+                reject(promise, internalError("The host Activity is not available"));
+                return;
+            }
 
-        ensureControllersFor(activity);
-        scanController.startScan(
-                bridgeOptions.getReadConfiguration(),
-                bridgeOptions.getPresentation(),
-                bridgeOptions.getMessages(),
-                new NfcClient.ReadCallback() {
-                    @Override
-                    public void onSuccess(NfcTagSnapshot snapshot) {
-                        promise.resolve(Arguments.makeNativeMap(snapshot.toMap()));
-                    }
-
-                    @Override
-                    public void onFailure(NfcError error) {
-                        reject(promise, error);
-                    }
-                }
-        );
-    }
-
-    void cancelScan(Promise promise) {
-        if (scanController != null) {
-            scanController.cancelScan();
-        }
-        promise.resolve(null);
-    }
-
-    void isScanning(Promise promise) {
-        promise.resolve(scanController != null && scanController.isScanning());
-    }
-
-    void writeNdef(
-            ReadableMap message,
-            ReadableMap options,
-            Promise promise
-    ) {
-        if (invalidated) {
-            reject(promise, internalError("The NFC bridge has been invalidated"));
-            return;
-        }
-
-        final SfioraBridgeWriteRequest request;
-        try {
-            request = SfioraBridgeWriteRequest.parse(
-                    message == null ? null : message.toHashMap(),
-                    options == null ? null : options.toHashMap()
-            );
-        } catch (SfioraBridgeWriteRequestException error) {
-            reject(promise, invalidOptions(error));
-            return;
-        }
-
-        Activity activity = availableActivity();
-        if (activity == null) {
-            reject(promise, internalError("The host Activity is not available"));
-            return;
-        }
-
-        ensureControllersFor(activity);
-        writeController.startWrite(
-                request.getMessage(),
-                request.getWriteConfiguration(),
-                request.getMessages(),
-                new NfcClient.WriteCallback() {
-                    @Override
-                    public void onSuccess(NfcWriteResult result) {
-                        promise.resolve(Arguments.makeNativeMap(result.toMap()));
-                    }
-
-                    @Override
-                    public void onFailure(NfcError error) {
-                        reject(promise, error);
-                    }
-                }
-        );
-    }
-
-    void initializeNdef(
-            ReadableMap message,
-            ReadableMap marker,
-            ReadableMap options,
-            Promise promise
-    ) {
-        if (invalidated) {
-            reject(promise, internalError("The NFC bridge has been invalidated"));
-            return;
-        }
-
-        final SfioraBridgeWriteRequest request;
-        final NdefExternalType externalType;
-        try {
-            request = SfioraBridgeWriteRequest.parse(
-                    message == null ? null : message.toHashMap(),
-                    options == null ? null : options.toHashMap()
-            );
-            externalType = SfioraBridgeWriteRequest.parseExternalTypeMarker(
-                    marker == null ? null : marker.toHashMap()
-            );
-        } catch (SfioraBridgeWriteRequestException error) {
-            reject(promise, invalidOptions(error));
-            return;
-        }
-
-        Activity activity = availableActivity();
-        if (activity == null) {
-            reject(promise, internalError("The host Activity is not available"));
-            return;
-        }
-
-        ensureControllersFor(activity);
-        try {
-            writeController.startInitialize(
-                    request.getMessage(),
-                    externalType,
-                    request.getWriteConfiguration(),
-                    request.getMessages(),
-                    new NfcClient.InitializationCallback() {
+            if (!ensureControllersFor(activity)) {
+                reject(promise, new NfcError(
+                        NfcErrorCode.SCAN_BUSY,
+                        "The previous NFC session is still closing", true
+                ));
+                return;
+            }
+            scanController.startScan(
+                    bridgeOptions.getReadConfiguration(),
+                    bridgeOptions.getPresentation(),
+                    bridgeOptions.getMessages(),
+                    new NfcClient.ReadCallback() {
                         @Override
-                        public void onSuccess(NfcInitializationResult result) {
-                            promise.resolve(
-                                    Arguments.makeNativeMap(result.toMap())
-                            );
+                        public void onSuccess(NfcTagSnapshot snapshot) {
+                            promise.resolve(Arguments.makeNativeMap(snapshot.toMap()));
                         }
 
                         @Override
@@ -198,29 +97,168 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
                         }
                     }
             );
-        } catch (IllegalArgumentException error) {
-            reject(promise, invalidOptions(error));
-        }
+        });
+    }
+
+    void cancelScan(Promise promise) {
+        UiThreadUtil.runOnUiThread(() -> {
+            if (scanController != null) {
+                scanController.cancelScan();
+            }
+            promise.resolve(null);
+        });
+    }
+
+    void isScanning(Promise promise) {
+        UiThreadUtil.runOnUiThread(() -> {
+            promise.resolve(scanController != null && scanController.isScanning());
+        });
+    }
+
+    void writeNdef(
+            ReadableMap message,
+            ReadableMap options,
+            Promise promise
+    ) {
+        UiThreadUtil.runOnUiThread(() -> {
+            if (invalidated) {
+                reject(promise, internalError("The NFC bridge has been invalidated"));
+                return;
+            }
+
+            final SfioraBridgeWriteRequest request;
+            try {
+                request = SfioraBridgeWriteRequest.parse(
+                        message == null ? null : message.toHashMap(),
+                        options == null ? null : options.toHashMap()
+                );
+            } catch (SfioraBridgeWriteRequestException error) {
+                reject(promise, invalidOptions(error));
+                return;
+            }
+
+            Activity activity = availableActivity();
+            if (activity == null) {
+                reject(promise, internalError("The host Activity is not available"));
+                return;
+            }
+
+            if (!ensureControllersFor(activity)) {
+                reject(promise, new NfcError(
+                        NfcErrorCode.WRITE_BUSY,
+                        "The previous NFC session is still closing", true
+                ));
+                return;
+            }
+            writeController.startWrite(
+                    request.getMessage(),
+                    request.getWriteConfiguration(),
+                    request.getMessages(),
+                    new NfcClient.WriteCallback() {
+                        @Override
+                        public void onSuccess(NfcWriteResult result) {
+                            promise.resolve(Arguments.makeNativeMap(result.toMap()));
+                        }
+
+                        @Override
+                        public void onFailure(NfcError error) {
+                            reject(promise, error);
+                        }
+                    }
+            );
+        });
+    }
+
+    void initializeNdef(
+            ReadableMap message,
+            ReadableMap marker,
+            ReadableMap options,
+            Promise promise
+    ) {
+        UiThreadUtil.runOnUiThread(() -> {
+            if (invalidated) {
+                reject(promise, internalError("The NFC bridge has been invalidated"));
+                return;
+            }
+
+            final SfioraBridgeWriteRequest request;
+            final NdefExternalType externalType;
+            try {
+                request = SfioraBridgeWriteRequest.parse(
+                        message == null ? null : message.toHashMap(),
+                        options == null ? null : options.toHashMap()
+                );
+                externalType = SfioraBridgeWriteRequest.parseExternalTypeMarker(
+                        marker == null ? null : marker.toHashMap()
+                );
+            } catch (SfioraBridgeWriteRequestException error) {
+                reject(promise, invalidOptions(error));
+                return;
+            }
+
+            Activity activity = availableActivity();
+            if (activity == null) {
+                reject(promise, internalError("The host Activity is not available"));
+                return;
+            }
+
+            if (!ensureControllersFor(activity)) {
+                reject(promise, new NfcError(
+                        NfcErrorCode.WRITE_BUSY,
+                        "The previous NFC session is still closing", true
+                ));
+                return;
+            }
+            try {
+                writeController.startInitialize(
+                        request.getMessage(),
+                        externalType,
+                        request.getWriteConfiguration(),
+                        request.getMessages(),
+                        new NfcClient.InitializationCallback() {
+                            @Override
+                            public void onSuccess(NfcInitializationResult result) {
+                                promise.resolve(
+                                        Arguments.makeNativeMap(result.toMap())
+                                );
+                            }
+
+                            @Override
+                            public void onFailure(NfcError error) {
+                                reject(promise, error);
+                            }
+                        }
+                );
+            } catch (IllegalArgumentException error) {
+                reject(promise, invalidOptions(error));
+            }
+        });
     }
 
     void cancelWrite(Promise promise) {
-        if (writeController != null) {
-            writeController.cancelWrite();
-        }
-        promise.resolve(null);
+        UiThreadUtil.runOnUiThread(() -> {
+            if (writeController != null) {
+                writeController.cancelWrite();
+            }
+            promise.resolve(null);
+        });
     }
 
     void isWriting(Promise promise) {
-        promise.resolve(writeController != null && writeController.isWriting());
+        UiThreadUtil.runOnUiThread(() -> {
+            promise.resolve(writeController != null && writeController.isWriting());
+        });
     }
 
     void invalidate() {
-        if (invalidated) {
-            return;
-        }
-        invalidated = true;
-        reactContext.removeLifecycleEventListener(this);
-        releaseControllers(true);
+        UiThreadUtil.runOnUiThread(() -> {
+            if (invalidated) {
+                return;
+            }
+            invalidated = true;
+            reactContext.removeLifecycleEventListener(this);
+            releaseControllers(true);
+        });
     }
 
     @Override
@@ -230,40 +268,50 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
 
     @Override
     public void onHostPause() {
-        releaseControllers(true);
+        UiThreadUtil.runOnUiThread(() -> {
+            releaseControllers(true);
+        });
     }
 
     @Override
     public void onHostDestroy() {
-        releaseControllers(true);
+        UiThreadUtil.runOnUiThread(() -> {
+            releaseControllers(true);
+        });
     }
 
     private Activity availableActivity() {
         Activity activity = reactContext.getCurrentActivity();
-        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+        if (reactContext.getLifecycleState() != LifecycleState.RESUMED
+                || activity == null || activity.isFinishing() || activity.isDestroyed()) {
             return null;
         }
         return activity;
     }
 
-    private void ensureControllersFor(Activity activity) {
+    private boolean ensureControllersFor(Activity activity) {
         Activity controllerActivity = controllerActivityRef.get();
         if (scanController != null
                 && writeController != null
                 && controllerActivity == activity) {
-            return;
+            return true;
         }
         releaseControllers(true);
+        if ((scanController != null && scanController.isScanning())
+                || (writeController != null && writeController.isWriting())) {
+            return false;
+        }
         scanController = new NfcScanController(activity);
         writeController = new NfcWriteController(activity);
         controllerActivityRef = new WeakReference<>(activity);
+        return true;
     }
 
     private void releaseControllers(boolean reportCancellation) {
         NfcScanController currentScanController = scanController;
         NfcWriteController currentWriteController = writeController;
-        scanController = null;
-        writeController = null;
+        // Retain closing controllers so state queries stay truthful until the
+        // core has released its lease. A new Activity waits for that cleanup.
         controllerActivityRef.clear();
         if (currentScanController != null) {
             if (reportCancellation && currentScanController.isScanning()) {

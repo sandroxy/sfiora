@@ -2,6 +2,18 @@
 
 各渠道的可用版本以对应发布页面为准，离线文件见 [GitHub Releases](https://github.com/sandroxy/sfiora/releases)。
 
+## 1.1.0（未发布）
+
+- RN Android 的模块调用与 Activity 生命周期统一在主线程管理；关闭中的控制器保留真实忙碌状态。
+- iOS 自动读取的 NDEF 查询与读取回调核对实际会话，忽略旧会话的迟到回调。
+- Android 将连接关闭移到独立线程，等待 I/O 退出及最终关闭后释放占用，并处理过期标签引起的关闭异常。
+- Android 深度读取在切换标签技术前完成 NDEF 关闭；切换期间取消或关闭失败时不进入后续探测。
+- Android 读取与初始化判断仅使用实时 NDEF 消息，空消息不再回退到发现时缓存。
+- 会话关闭异常迟延时，有界交付待处理结果；实际资源释放前仍保持忙碌，不自动重放写入。
+- RN、UNI legacy、UTS 和 x 提供 `waitForIdle()`，等待上限为 5 秒（可配置），查询失败或超时不会伪装为空闲。
+- 增加关闭阻塞、迟到结果、取消/超时、写后移开标签和 Android 平台 NDEF 编码交叉验证。
+- 补充标签技术互斥、iOS 生产读取链路的迟到回调，以及 RN 主队列与宿主生命周期交错的运行测试。
+
 ## 1.0.0
 
 - 提供 Android 与 iOS 原生 NFC 核心，以及 React Native、经典 uni-app legacy / UTS 和 uni-app x Vapor 的 Android/iOS 接入。

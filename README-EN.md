@@ -315,7 +315,7 @@ to establish the tag's actual state.
 
 Start only one read/write operation at a time. Disable actions while a call is
 pending or the native session remains active; iOS may remain busy while closing.
-RN/UNI expose `isScanning()` / `isWriting()`, and native clients expose their
+RN/UNI expose `isScanning()` / `isWriting()` and bounded `waitForIdle()`, and native clients expose their
 corresponding states. A cancellation request returning does not mean the panel
 has disappeared; still handle the original operation's result.
 
@@ -335,6 +335,13 @@ and [UNI guide](adapters/uniapp/README.md); shared fields are defined in
   stable contact throughout the operation.
 - Still busy after cancellation: wait for actual idle state; do not force-enable
   actions after an arbitrary delay.
+
+`waitForIdle()` observes this bridge instance and defaults to 5 seconds. A
+`SESSION_CLOSE_TIMEOUT` rejection neither cancels the operation nor releases
+its resources; keep actions gated by actual state and allow a state refresh.
+Native cleanup may deliver a pending result after a five-second grace period
+while remaining busy until the actual close. Android reads and initialization
+checks use live NDEF data; an empty live message never falls back to discovery cache.
 
 ## Maintenance and support
 

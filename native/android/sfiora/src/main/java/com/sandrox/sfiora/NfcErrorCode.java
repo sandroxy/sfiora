@@ -9,6 +9,7 @@ public enum NfcErrorCode {
     USER_CANCELLED,
     SCAN_TIMEOUT,
     WRITE_TIMEOUT,
+    SESSION_CLOSE_TIMEOUT,
     TAG_LOST,
     UNSUPPORTED_TAG,
     READ_FAILED,

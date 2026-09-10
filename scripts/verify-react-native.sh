@@ -72,13 +72,14 @@ for architecture in false true; do
         -p "${consumer_dir}/android" \
         --no-daemon \
         -PnewArchEnabled="${architecture}" \
+        -PminSdkVersion=24 \
         -PsfioraReactNativeVersion="${react_native_version}" \
         -PsfioraReactNativePath="${react_native_path}" \
         -PsfioraReactNativeGradlePluginPath="${react_native_gradle_plugin_path}" \
         -PsfioraReactNativeCodegenPath="${react_native_codegen_path}" \
         -PreactNativeGradlePluginPath="${react_native_gradle_plugin_path}" \
         -PsfioraPackagePath="${package_dir}" \
-        :app:compileDebugJavaWithJavac
+        :app:compileDebugJavaWithJavac :sfiora:testDebugUnitTest
 done
 
 if ruby -e 'require "xcodeproj"' >/dev/null 2>&1; then

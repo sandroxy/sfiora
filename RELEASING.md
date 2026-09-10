@@ -65,6 +65,11 @@ tag, with packaged documentation finalized. Formal Android output requires
 `SFIORA_SIGNING_KEY`. The public Swift Package is binary, so iOS uses a
 two-commit handoff: build the XCFramework once
 from the clean source commit, then record those exact bytes in `Package.swift`.
+During that first commit, keep the previous published binary version/checksum
+in `Package.swift`; never assign the previous checksum to the next version.
+Source checks and CI use `verify-release-metadata.sh --allow-pending-ios` for
+this handoff. The default check and formal candidate preparation remain strict:
+they require the current version and its actual archive checksum.
 
 ```sh
 export SFIORA_IOS_SOURCE_COMMIT="$(git rev-parse HEAD)"

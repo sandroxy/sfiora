@@ -163,8 +163,53 @@ function isWriting() {
   return invoke('isWriting');
 }
 
+function waitForIdle(options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    return Promise.reject(new SfioraError({
+      code: 'INVALID_OPTIONS', message: 'waitForIdle options must be an object', recoverable: true,
+    }));
+  }
+  const timeout = options.timeoutMilliseconds === undefined ? 5000 : options.timeoutMilliseconds;
+  if (!Number.isInteger(timeout) || timeout < 1 || timeout > 60000) {
+    return Promise.reject(new SfioraError({
+      code: 'INVALID_OPTIONS', message: 'timeoutMilliseconds must be an integer from 1 to 60000', recoverable: true,
+    }));
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let pollTimer;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(deadlineTimer);
+      clearTimeout(pollTimer);
+      if (error) reject(error);
+      else resolve();
+    };
+    const deadlineTimer = setTimeout(() => finish(new SfioraError({
+      code: 'SESSION_CLOSE_TIMEOUT',
+      message: 'NFC did not become idle before the wait deadline; its session may still be active',
+      recoverable: true,
+    })), timeout);
+    const poll = () => {
+      Promise.all([isScanning(), isWriting()]).then(([scanning, writing]) => {
+        if (settled) return;
+        if (typeof scanning !== 'boolean' || typeof writing !== 'boolean') {
+          finish(new SfioraError({ code: 'INTERNAL_ERROR', message: 'The NFC bridge returned invalid session state', recoverable: false }));
+        } else if (!scanning && !writing) {
+          finish();
+        } else {
+          pollTimer = setTimeout(poll, 50);
+        }
+      }, finish);
+    };
+    poll();
+  });
+}
+
 module.exports = {
   SfioraError,
+  waitForIdle,
   cancelScan,
   cancelWrite,
   getCapabilities,

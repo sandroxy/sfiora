@@ -74,3 +74,29 @@ final class NfcSessionRecoveryTests: XCTestCase {
         XCTAssertEqual(lifecycle.phase, .active)
     }
 }
+
+extension NfcSessionRecoveryTests {
+    func testClosingDeadlineSettlesOnceButKeepsSessionBusy() {
+        var lifecycle = NfcSessionLifecycle<String>()
+        XCTAssertEqual(lifecycle.begin(applicationIsActive: true), .start)
+        XCTAssertTrue(lifecycle.requestInvalidation(with: "cancelled"))
+        XCTAssertFalse(lifecycle.requestInvalidation(with: "late read"))
+        XCTAssertEqual(lifecycle.takeInvalidatingCompletion(), "cancelled")
+        XCTAssertNil(lifecycle.takeInvalidatingCompletion())
+        XCTAssertEqual(lifecycle.phase, .invalidating)
+        XCTAssertEqual(lifecycle.begin(applicationIsActive: true), .busy)
+        XCTAssertFalse(lifecycle.prepareRetry())
+        XCTAssertNil(lifecycle.completeInvalidation(fallback: "late system failure"))
+        XCTAssertEqual(lifecycle.begin(applicationIsActive: true), .start)
+    }
+
+    func testTimelyInvalidationCancelsTheDeadlineOutcome() {
+        var lifecycle = NfcSessionLifecycle<String>()
+        XCTAssertEqual(lifecycle.begin(applicationIsActive: true), .start)
+        XCTAssertTrue(lifecycle.requestInvalidation(with: "read failed"))
+        XCTAssertEqual(lifecycle.completeInvalidation(fallback: "system cancelled"), "read failed")
+        XCTAssertNil(lifecycle.takeInvalidatingCompletion())
+        XCTAssertEqual(lifecycle.begin(applicationIsActive: true), .start)
+        XCTAssertNil(lifecycle.takeInvalidatingCompletion())
+    }
+}

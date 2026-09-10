@@ -1,8 +1,8 @@
 import {
   InvokeSfioraNative, SfioraNativeCallback, GetCapabilities, StartScan,
-  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting,
+  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting, WaitForIdle,
 } from '../interface.uts'
-import { invokeObject, invokeBoolean, invokeVoid } from '../bridge.uts'
+import { invokeObject, invokeBoolean, invokeVoid, waitForNativeIdle } from '../bridge.uts'
 export { SfioraError } from '../bridge.uts'
 import { SfioraBridgeCoordinator } from 'SfioraUniRuntime'
 
@@ -35,4 +35,8 @@ export const cancelWrite: CancelWrite = function(): Promise<void> {
 }
 export const isWriting: IsWriting = function(): Promise<boolean> {
   return invokeBoolean(invokeSfioraNative, 'isWriting')
+}
+
+export const waitForIdle: WaitForIdle = function(options?: UTSJSONObject): Promise<void> {
+  return waitForNativeIdle(invokeSfioraNative, options)
 }

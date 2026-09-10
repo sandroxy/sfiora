@@ -61,7 +61,7 @@ jobs:
           :sfiora-ui:lintRelease
       - name: Verify release artifacts
         run: >-
-          ../../scripts/verify-release-metadata.sh &&
+          ../../scripts/verify-release-metadata.sh --allow-pending-ios &&
           ../../scripts/package-native-android.sh &&
           ../../scripts/verify-native-android.sh
       - name: Test shared Android bridge
@@ -79,10 +79,12 @@ jobs:
       - name: Check Swift formatting
         run: >-
           xcrun swift-format lint --strict --recursive
-          Package.swift native/ios/Package.swift native/ios/Sources tests/ios
+          Package.swift native/ios/Package.swift native/ios/Sources tests/ios tests/ios-runtime
           adapters/shared/Package.swift adapters/shared/ios/Sources adapters/shared/ios/Tests
       - name: Test canonical iOS source
         run: ./scripts/test-native-ios-source.sh
+      - name: Test production iOS session callbacks
+        run: ./scripts/test-native-ios-runtime.sh
       - name: Test shared iOS bridge
         working-directory: adapters/shared
         run: swift test -Xswiftc -warnings-as-errors
@@ -100,7 +102,7 @@ jobs:
           SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
       - name: Verify release artifacts
         run: >-
-          ./scripts/verify-release-metadata.sh &&
+          ./scripts/verify-release-metadata.sh --allow-pending-ios &&
           ./scripts/package-native-ios.sh &&
           ./scripts/verify-native-ios.sh
       - name: Build shared UTS iOS runtime against the packaged core

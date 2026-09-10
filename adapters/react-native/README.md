@@ -230,7 +230,23 @@ harmless.
 Allow only one read/write action at a time, including across screens. Disable
 both action buttons while a call is pending **or** either native state is true.
 iOS can deliver a successful result while its system panel is still closing;
-refresh the state until it becomes idle before enabling the next action.
+wait for actual idle before enabling the next action:
+
+```ts
+try {
+  await sfiora.waitForIdle({ timeoutMilliseconds: 5000 });
+} catch (error) {
+  // Display the error and keep the native-state gate; a refresh can try again.
+}
+```
+
+`waitForIdle()` checks this bridge instance, resolves with no value, and never
+cancels a request or reserves the next session. `timeoutMilliseconds` is an
+integer from 1 to 60000 (default 5000). `SESSION_CLOSE_TIMEOUT` also covers a
+state query that never answers. Query errors propagate; they are not idle.
+If native closing takes over five seconds, a pending result can arrive while
+its session is still busy. Android initialization and reads use live NDEF data,
+including a legitimately empty message, without discovery-cache fallback.
 Do not rely on a fixed delay or just the operation's `finally` block. If a state
 query fails, display the error rather than assuming the session is idle.
 
@@ -268,6 +284,7 @@ must supply every required non-empty field. See the shipped
 | `NFC_UNSUPPORTED`, `NFC_DISABLED` | Check device support or ask the user to enable NFC |
 | `SCAN_BUSY`, `WRITE_BUSY` | Let the current session finish; do not enqueue automatic retries |
 | `USER_CANCELLED` | End the local interaction normally |
+| `SESSION_CLOSE_TIMEOUT` | Keep the native-state gate and allow a state refresh; do not assume the session closed |
 | `SCAN_TIMEOUT`, `WRITE_TIMEOUT`, `TAG_LOST` | Ask the user to retry with stable tag contact |
 | `UNSUPPORTED_TAG`, `TAG_READ_ONLY`, `NDEF_CAPACITY_EXCEEDED` | Use a suitable formatted, writable tag or smaller message |
 | `READ_FAILED` | Inspect the read error; do not interpret it as an empty tag |

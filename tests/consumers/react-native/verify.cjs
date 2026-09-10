@@ -15,10 +15,12 @@ async function verifyInstalledPackage() {
       'isScanning',
       'isWriting',
       'startScan',
+      'waitForIdle',
       'writeNdef',
     ].sort()
   );
 
+  await sfiora.waitForIdle();
   const reactNativeCapabilities = await sfiora.getCapabilities();
   assert.equal(reactNativeCapabilities.platform, 'android');
   const writeResult = await sfiora.writeNdef({

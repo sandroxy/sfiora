@@ -251,7 +251,9 @@ final class NfcViewController: UIViewController {
 
 ## 会话、错误与接入排查
 
-应用同一时间只发起一个读写操作。按钮禁用条件应同时覆盖“调用尚未完成”和“原生仍在读写”；iOS 关闭会话期间可能继续忙碌。RN/UNI 用 `isScanning()` / `isWriting()`，原生用对应客户端状态。取消请求返回不等于系统面板已消失，仍需处理原操作结果。
+应用同一时间只发起一个读写操作。按钮禁用条件应同时覆盖“调用尚未完成”和“原生仍在读写”；iOS 关闭会话期间可能继续忙碌。RN/UNI 用 `isScanning()` / `isWriting()`，原生用对应客户端状态。取消请求返回不等于系统面板已消失，仍需处理原操作结果。RN/UNI 可用 `await waitForIdle()` 等待本桥接实例的空闲状态，默认最多 5 秒；`SESSION_CLOSE_TIMEOUT` 只表示等待超时，不会取消操作或释放资源。超时后继续按真实状态禁用入口，并允许用户刷新。
+
+原生关闭等待超过 5 秒时可先交付待处理结果，但忙碌状态会保留到实际关闭；不能只凭成功或失败回调恢复入口。Android 普通读取与初始化判断均使用实时 NDEF 结果，不以发现时缓存替代当前空消息。
 
 按稳定错误码处理结果，保留原生错误供排查。`recoverable` 只表达可重试性，不保证标签内容未变。完整 API、选项与错误说明见 [RN 使用说明](adapters/react-native/README.md) 和 [UNI 使用说明](adapters/uniapp/README.md)；共享类型见 [contract/types.ts](contract/types.ts)。
 

@@ -206,6 +206,10 @@ class NativeArtifactReuseTest < Minitest::Test
     %w[release-policy.json native-reuse-policy.json plugin.json].each do |name|
       FileUtils.cp(@repository.join(name), @root.join(name))
     end
+    # The fixture owns its version independently of the next product release.
+    manifest_path = @root.join("plugin.json")
+    manifest = JSON.parse(manifest_path.read).merge("version" => @candidate.fetch("version"))
+    manifest_path.write(JSON.pretty_generate(manifest) + "\n")
     @root.join(".gitignore").write("/dist/\n/snapshot/\n")
     @root.join("scripts/assert-release-version-available.rb").write("exit 0\n")
     scripts = {

@@ -111,6 +111,18 @@ struct NfcSessionLifecycle<Completion> {
         return completion
     }
 
+    /// End business waiting without claiming that Core NFC has released its session.
+    mutating func takeInvalidatingCompletion() -> Completion? {
+        guard phase == .invalidating else { return nil }
+        let completion: Completion?
+        switch pendingCompletion {
+        case .none: completion = nil
+        case .value(let value): completion = value
+        }
+        pendingCompletion = .none
+        return completion
+    }
+
     private mutating func reset() {
         phase = .idle
         pendingCompletion = .none

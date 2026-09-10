@@ -1,7 +1,7 @@
 {
   "id": "Sandrox-Sfiora",
   "displayName": "Sfiora 通用 NFC 读写",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "为 uni-app 与 uni-app x Android/iOS App 提供 NFC 标签读取、验证写入和标记初始化。",
   "keywords": [
     "NFC",

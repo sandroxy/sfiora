@@ -442,6 +442,7 @@
             "READ_FAILED",
             "WRITE_BUSY",
             "WRITE_TIMEOUT",
+            "SESSION_CLOSE_TIMEOUT",
             "TAG_READ_ONLY",
             "NDEF_CAPACITY_EXCEEDED",
             "WRITE_FAILED",

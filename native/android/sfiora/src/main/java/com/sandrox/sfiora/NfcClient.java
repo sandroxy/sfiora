@@ -24,10 +24,14 @@ import java.util.concurrent.RejectedExecutionException;
  *
  * <p>Callbacks are always delivered on the Android main thread. The host must
  * call {@link #stop()} before its activity leaves the foreground and
- * {@link #close()} when the client is no longer needed.</p>
+ * {@link #close()} when the client is no longer needed. Connection cleanup runs
+ * off the main thread. If cleanup takes over five seconds, the pending result
+ * is delivered while state remains busy; the next operation must wait for the
+ * state callback to report idle.</p>
  */
 public final class NfcClient implements AutoCloseable {
     private static final String LOG_TAG = "SfioraNfcClient";
+    private static final long COMPLETION_GRACE_MILLIS = 5000;
 
     public interface ReadCallback {
         void onSuccess(NfcTagSnapshot tag);
@@ -81,6 +85,11 @@ public final class NfcClient implements AutoCloseable {
         private Future<?> task;
         private AndroidNdefConnection connection;
         private Runnable timeout;
+        private boolean finishing;
+        private boolean ioRunning;
+        private boolean finalCloseScheduled;
+        private Completion completion;
+        private Runnable completionDeadline;
 
         private ActiveOperation(
                 long identifier,
@@ -122,6 +131,7 @@ public final class NfcClient implements AutoCloseable {
     private final NfcAdapter adapter;
     private final Handler mainHandler;
     private final ExecutorService worker;
+    private final ExecutorService closer;
     private final Object stateLock = new Object();
 
     private ActiveOperation activeOperation;
@@ -140,6 +150,11 @@ public final class NfcClient implements AutoCloseable {
         mainHandler = new Handler(Looper.getMainLooper());
         worker = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "sfiora-nfc-io");
+            thread.setDaemon(true);
+            return thread;
+        });
+        closer = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "sfiora-nfc-close");
             thread.setDaemon(true);
             return thread;
         });
@@ -261,7 +276,7 @@ public final class NfcClient implements AutoCloseable {
                 operation = activeOperation;
             }
             if (operation != null) {
-                cancelIo(operation);
+                operation.completion = null;
                 completeOnMain(operation.identifier, null);
             }
         });
@@ -279,8 +294,9 @@ public final class NfcClient implements AutoCloseable {
         }
         runOnMain(() -> {
             if (operation != null) {
-                cancelIo(operation);
                 completeOnMain(operation.identifier, null);
+            } else {
+                closer.shutdown();
             }
             worker.shutdownNow();
         });
@@ -416,7 +432,6 @@ public final class NfcClient implements AutoCloseable {
             if (current == null) {
                 return;
             }
-            cancelIo(current);
             NfcErrorCode code = current.kind == OperationKind.READ
                     ? NfcErrorCode.SCAN_TIMEOUT
                     : NfcErrorCode.WRITE_TIMEOUT;
@@ -446,6 +461,7 @@ public final class NfcClient implements AutoCloseable {
             operation = activeOperation;
             if (operation == null
                     || operation.identifier != identifier
+                    || operation.finishing
                     || operation.tagClaimed) {
                 return;
             }
@@ -467,6 +483,13 @@ public final class NfcClient implements AutoCloseable {
     }
 
     private void perform(ActiveOperation operation, Tag tag) {
+        synchronized (stateLock) {
+            // Future.cancel() alone does not prove that a task has stopped.
+            if (activeOperation != operation || operation.finishing) {
+                return;
+            }
+            operation.ioRunning = true;
+        }
         try {
             switch (operation.kind) {
                 case READ:
@@ -537,6 +560,11 @@ public final class NfcClient implements AutoCloseable {
                             error
                     )
             );
+        } finally {
+            synchronized (stateLock) {
+                operation.ioRunning = false;
+            }
+            runOnMain(() -> finishCleanupWhenReady(operation));
         }
     }
 
@@ -598,7 +626,7 @@ public final class NfcClient implements AutoCloseable {
                     ? NfcNdefStatus.READ_WRITE
                     : NfcNdefStatus.READ_ONLY;
             AndroidNdefConnection.ReadResult readResult =
-                    connection.readWithCachedFallback();
+                    connection.read();
             String warning = readResult.getConversionError() == null
                     ? null
                     : "The raw NDEF message was preserved, but it could not "
@@ -657,8 +685,11 @@ public final class NfcClient implements AutoCloseable {
                     error,
                     "NDEF metadata was found but the message could not be read"
             );
-        } finally {
-            closeConnection(operation, connection);
+        }
+        if (operation.readConfiguration.isDeepReadEnabled()) {
+            // Android permits only one connected TagTechnology per tag. Finish
+            // the NDEF phase on this worker before the snapshot's memory probes.
+            closeNdefBeforeProbe(operation, connection);
         }
         completeWithRead(
                 operation.identifier,
@@ -691,95 +722,91 @@ public final class NfcClient implements AutoCloseable {
         }
 
         registerConnection(operation, connection);
-        try {
-            connection.connect();
-            if (operation.kind == OperationKind.INITIALIZE) {
-                AndroidNdefConnection.ReadResult current =
-                        connection.readWithCachedFallback();
-                if (containsMarker(current, operation.marker)) {
-                    NfcNdefStatus status = connection.isWritable()
-                            ? NfcNdefStatus.READ_WRITE
-                            : NfcNdefStatus.READ_ONLY;
-                    NfcTagSnapshot snapshot = snapshot(
-                            tag,
-                            connection,
-                            status,
-                            current
-                    );
-                    completeWithInitialization(
-                            operation.identifier,
-                            NfcInitializationResult.preserved(
-                                    operation.marker,
-                                    snapshot,
-                                    System.currentTimeMillis()
-                            )
-                    );
-                    return;
-                }
-            }
-
-            NdefWritePolicy.validateWritable(
-                    connection.isWritable(),
-                    connection.getCapacityBytes(),
-                    operation.message
-            );
-            markWriteCommandStarted(operation);
-            connection.write(operation.message);
-
-            AndroidNdefConnection.ReadResult verified;
-            try {
-                verified = connection.read();
-            } catch (IOException | FormatException error) {
-                throw new NfcOperationException(
-                        NfcErrorCode.WRITE_VERIFICATION_FAILED,
-                        "The tag was written but could not be read back for verification",
-                        true,
-                    error
+        connection.connect();
+        if (operation.kind == OperationKind.INITIALIZE) {
+            AndroidNdefConnection.ReadResult current =
+                    connection.read();
+            if (containsMarker(current, operation.marker)) {
+                NfcNdefStatus status = connection.isWritable()
+                        ? NfcNdefStatus.READ_WRITE
+                        : NfcNdefStatus.READ_ONLY;
+                NfcTagSnapshot snapshot = snapshot(
+                        tag,
+                        connection,
+                        status,
+                        current
                 );
-            }
-            if (verified.getConversionError() != null) {
-                throw new NfcOperationException(
-                        NfcErrorCode.WRITE_VERIFICATION_FAILED,
-                        "The tag was written, but its NDEF message could not "
-                                + "be represented for verification",
-                        true,
-                        verified.getConversionError()
-                );
-            }
-            NdefWritePolicy.verify(operation.message, verified.getMessage());
-            markWriteVerified(operation);
-            NfcNdefStatus status = connection.isWritable()
-                    ? NfcNdefStatus.READ_WRITE
-                    : NfcNdefStatus.READ_ONLY;
-            NfcTagSnapshot snapshot = snapshot(
-                    tag,
-                    connection,
-                    status,
-                    verified
-            );
-            long completedAt = System.currentTimeMillis();
-            if (operation.kind == OperationKind.INITIALIZE) {
                 completeWithInitialization(
                         operation.identifier,
-                        NfcInitializationResult.initialized(
+                        NfcInitializationResult.preserved(
                                 operation.marker,
                                 snapshot,
-                                operation.message,
-                                completedAt
+                                System.currentTimeMillis()
                         )
                 );
-            } else {
-                completeWithWrite(
-                        operation.identifier,
-                        new NfcWriteResult(
-                                snapshot,
-                                operation.message,
-                                completedAt
-                        )
-                );
+                return;
             }
-        } finally {
-            closeConnection(operation, connection);
+        }
+
+        NdefWritePolicy.validateWritable(
+                connection.isWritable(),
+                connection.getCapacityBytes(),
+                operation.message
+        );
+        markWriteCommandStarted(operation);
+        connection.write(operation.message);
+
+        AndroidNdefConnection.ReadResult verified;
+        try {
+            verified = connection.read();
+        } catch (IOException | FormatException error) {
+            throw new NfcOperationException(
+                    NfcErrorCode.WRITE_VERIFICATION_FAILED,
+                    "The tag was written but could not be read back for verification",
+                    true,
+                error
+            );
+        }
+        if (verified.getConversionError() != null) {
+            throw new NfcOperationException(
+                    NfcErrorCode.WRITE_VERIFICATION_FAILED,
+                    "The tag was written, but its NDEF message could not "
+                            + "be represented for verification",
+                    true,
+                    verified.getConversionError()
+            );
+        }
+        NdefWritePolicy.verify(operation.message, verified.getMessage());
+        markWriteVerified(operation);
+        NfcNdefStatus status = connection.isWritable()
+                ? NfcNdefStatus.READ_WRITE
+                : NfcNdefStatus.READ_ONLY;
+        NfcTagSnapshot snapshot = snapshot(
+                tag,
+                connection,
+                status,
+                verified
+        );
+        long completedAt = System.currentTimeMillis();
+        if (operation.kind == OperationKind.INITIALIZE) {
+            completeWithInitialization(
+                    operation.identifier,
+                    NfcInitializationResult.initialized(
+                            operation.marker,
+                            snapshot,
+                            operation.message,
+                            completedAt
+                    )
+            );
+        } else {
+            completeWithWrite(
+                    operation.identifier,
+                    new NfcWriteResult(
+                            snapshot,
+                            operation.message,
+                            completedAt
+                    )
+            );
         }
     }
 
@@ -788,34 +815,50 @@ public final class NfcClient implements AutoCloseable {
             AndroidNdefConnection connection
     ) throws IOException {
         synchronized (stateLock) {
-            if (activeOperation != operation) {
-                connection.close();
+            if (activeOperation != operation || operation.finishing) {
+                // Not connected yet; cancellation owns any registered connection.
                 throw new IOException("The NFC operation is no longer active");
             }
             operation.connection = connection;
         }
     }
 
-    private void closeConnection(
+    private void closeNdefBeforeProbe(
             ActiveOperation operation,
             AndroidNdefConnection connection
-    ) {
+    ) throws IOException {
+        // A failed close must not be followed by another technology's connect.
+        // Keep this connection registered while close blocks, so cancellation
+        // can still interrupt it from the independent closer.
+        connection.close();
         synchronized (stateLock) {
-            if (operation.connection == connection) {
-                operation.connection = null;
+            if (activeOperation != operation || operation.finishing) {
+                // Cancellation may already have queued a close of this object.
+                // Retain it for final cleanup and never start another technology.
+                throw new IOException("The NFC operation ended during technology switching");
             }
+            // With no cancellation in progress, no queued closer can still own
+            // this connection. Do not close an old NDEF object during a probe.
+            operation.connection = null;
+        }
+    }
+
+    private static void closeConnection(AndroidNdefConnection connection) {
+        if (connection == null) {
+            return;
         }
         try {
             connection.close();
-        } catch (IOException ignored) {
-            // A completed operation does not change outcome when close fails.
+        } catch (IOException | RuntimeException error) {
+            // A stale Android tag cookie can throw SecurityException from close.
+            Log.w(LOG_TAG, "NFC connection cleanup failed", error);
         }
     }
 
     private void markWriteCommandStarted(ActiveOperation operation)
             throws NfcOperationException {
         synchronized (stateLock) {
-            if (activeOperation != operation) {
+            if (activeOperation != operation || operation.finishing) {
                 throw new NfcOperationException(
                         NfcErrorCode.USER_CANCELLED,
                         "The NFC write was cancelled",
@@ -880,15 +923,21 @@ public final class NfcClient implements AutoCloseable {
 
     private void completeWithFailure(long identifier, NfcError error) {
         complete(identifier, operation -> {
+            NfcError deliveredError;
+            synchronized (stateLock) {
+                String message = uncertainWriteMessage(operation, error.getMessage());
+                deliveredError = message.equals(error.getMessage()) ? error : new NfcError(
+                        error.getCode(), message, error.isRecoverable(), error.getCause());
+            }
             switch (operation.kind) {
                 case READ:
-                    operation.readCallback.onFailure(error);
+                    operation.readCallback.onFailure(deliveredError);
                     break;
                 case WRITE:
-                    operation.writeCallback.onFailure(error);
+                    operation.writeCallback.onFailure(deliveredError);
                     break;
                 case INITIALIZE:
-                    operation.initializationCallback.onFailure(error);
+                    operation.initializationCallback.onFailure(deliveredError);
                     break;
                 default:
                     throw new IllegalStateException(
@@ -906,16 +955,53 @@ public final class NfcClient implements AutoCloseable {
         ActiveOperation operation;
         synchronized (stateLock) {
             operation = activeOperation;
-            if (operation == null || operation.identifier != identifier) {
+            if (operation == null || operation.identifier != identifier
+                    || operation.finishing) {
                 return;
             }
-            activeOperation = null;
+            operation.finishing = true;
+            operation.completion = completion;
         }
 
         if (operation.timeout != null) {
             mainHandler.removeCallbacks(operation.timeout);
         }
+        // Keep the lease until both I/O and final close have returned. A close on
+        // a separate executor can interrupt a blocked Binder read/write call.
         cancelIo(operation);
+        operation.completionDeadline = () -> deliverCompletion(operation);
+        mainHandler.postDelayed(operation.completionDeadline, COMPLETION_GRACE_MILLIS);
+        finishCleanupWhenReady(operation);
+    }
+
+    private void finishCleanupWhenReady(ActiveOperation operation) {
+        synchronized (stateLock) {
+            if (activeOperation != operation || !operation.finishing
+                    || operation.ioRunning || operation.finalCloseScheduled) {
+                return;
+            }
+            operation.finalCloseScheduled = true;
+        }
+        // This final close is queued after any interruption close, and after the
+        // worker exits. It covers cancellation racing with connection.connect().
+        closer.execute(() -> {
+            closeConnection(operation.connection);
+            runOnMain(() -> finishCleanup(operation));
+        });
+    }
+
+    private void finishCleanup(ActiveOperation operation) {
+        synchronized (stateLock) {
+            if (activeOperation != operation) {
+                return;
+            }
+            activeOperation = null;
+            operation.connection = null;
+            if (closed) {
+                closer.shutdown();
+            }
+        }
+        mainHandler.removeCallbacks(operation.completionDeadline);
         Activity activity = activityReference.get();
         if (adapter != null && activity != null) {
             try {
@@ -928,6 +1014,12 @@ public final class NfcClient implements AutoCloseable {
         if (operation.stateReported) {
             notifyStateChanged(operation, false);
         }
+        deliverCompletion(operation);
+    }
+
+    private void deliverCompletion(ActiveOperation operation) {
+        Completion completion = operation.completion;
+        operation.completion = null;
         if (completion != null) {
             try {
                 completion.deliver(operation);
@@ -949,7 +1041,6 @@ public final class NfcClient implements AutoCloseable {
     }
 
     private void cancelOperation(ActiveOperation operation) {
-        cancelIo(operation);
         completeWithFailure(
                 operation.identifier,
                 new NfcError(
@@ -969,15 +1060,11 @@ public final class NfcClient implements AutoCloseable {
         AndroidNdefConnection connection;
         Future<?> task;
         synchronized (stateLock) {
-            connection = operation.connection;
+            connection = operation.ioRunning ? operation.connection : null;
             task = operation.task;
         }
         if (connection != null) {
-            try {
-                connection.close();
-            } catch (IOException ignored) {
-                // Closing only serves to unblock an active I/O call.
-            }
+            closer.execute(() -> closeConnection(connection));
         }
         if (task != null && !task.isDone()) {
             task.cancel(true);
@@ -988,6 +1075,7 @@ public final class NfcClient implements AutoCloseable {
         synchronized (stateLock) {
             return activeOperation != null
                     && activeOperation.identifier == identifier
+                    && !activeOperation.finishing
                     ? activeOperation
                     : null;
         }
@@ -1053,7 +1141,8 @@ public final class NfcClient implements AutoCloseable {
     ) {
         if (operation.kind != OperationKind.READ
                 && operation.writeCommandStarted
-                && !operation.writeVerified) {
+                && !operation.writeVerified
+                && !baseMessage.contains("the tag may have changed because the write was not verified")) {
             return baseMessage
                     + "; the tag may have changed because the write was not verified";
         }

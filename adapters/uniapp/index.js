@@ -11,6 +11,6 @@ const api = createSfiora((method, args, callback) => {
 });
 
 export const {
-  getCapabilities, startScan, cancelScan, isScanning,
+  waitForIdle, getCapabilities, startScan, cancelScan, isScanning,
   writeNdef, initializeNdef, cancelWrite, isWriting,
 } = api;

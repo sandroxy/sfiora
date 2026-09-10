@@ -5,7 +5,15 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/release-common.sh"
 
-ruby -rjson -rdigest -e '
+allow_pending_ios=false
+case "${1:-}" in
+    --allow-pending-ios) allow_pending_ios=true; shift ;;
+    "") ;;
+    *) echo "Usage: $0 [--allow-pending-ios]" >&2; exit 1 ;;
+esac
+[[ $# -eq 0 ]] || { echo "Unexpected arguments" >&2; exit 1; }
+
+ruby -rjson -rdigest -rrubygems -e '
     manifest = JSON.parse(File.read(ARGV.fetch(0)))
     root = ARGV.fetch(1)
 
@@ -206,7 +214,11 @@ ruby -rjson -rdigest -e '
     abort("Package.swift minimum iOS differs from plugin.json") unless
       package_swift.include?(expected_platform)
     package_version = package_swift[/let sfioraVersion = "([^"]+)"/, 1]
-    abort("Package.swift version differs from plugin.json") unless package_version == version
+    pending_ios = ARGV.fetch(2) == "true" &&
+      package_version&.match?(/\A[0-9]+\.[0-9]+\.[0-9]+\z/) &&
+      Gem::Version.new(package_version) < Gem::Version.new(version)
+    abort("Package.swift is pending the current iOS archive version/checksum; complete the two-commit release handoff") unless
+      package_version == version || pending_ios
     abort("Package.swift release base URL is invalid") unless package_swift.include?(
       %q{let sfioraReleaseBaseURL =} + "\n" +
         %q{    "https://github.com/sandroxy/sfiora/releases/download/\(sfioraVersion)"}
@@ -218,7 +230,8 @@ ruby -rjson -rdigest -e '
     abort("Package.swift binary checksum is invalid") unless
       binary_checksum&.match?(/\A[0-9a-f]{64}\z/) &&
         package_swift.include?(%q{checksum: sfioraBinaryChecksum})
-    ios_artifact = File.join(root, "dist/native-ios/sfiora-#{version}.xcframework.zip")
+    puts("iOS binary manifest remains at #{package_version}; #{version} release metadata handoff is pending.") if pending_ios
+    ios_artifact = File.join(root, "dist/native-ios/sfiora-#{package_version}.xcframework.zip")
     if File.file?(ios_artifact)
       abort("Package.swift checksum differs from the local iOS artifact") unless
         Digest::SHA256.file(ios_artifact).hexdigest == binary_checksum
@@ -239,6 +252,6 @@ ruby -rjson -rdigest -e '
     end
     abort("Gitee publication identity remains in: #{stale_identity.join(", ")}") unless
       stale_identity.empty?
-  ' "${sfiora_plugin_manifest}" "${sfiora_root}"
+  ' "${sfiora_plugin_manifest}" "${sfiora_root}" "${allow_pending_ios}"
 
-printf '%s\n' "Sfiora ${sfiora_version} release metadata is consistent."
+printf '%s\n' "Sfiora ${sfiora_version} metadata checks passed."

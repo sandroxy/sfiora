@@ -233,10 +233,15 @@ export async function initializeTag() {
 | `cancelWrite()` | `Promise<void>`，也取消初始化 |
 | `isScanning()` | `Promise<boolean>` |
 | `isWriting()` | `Promise<boolean>` |
+| `waitForIdle(options?)` | `Promise<void>`，有上限地等待本桥接实例空闲 |
 
 取消没有进行中的操作不会报错。取消方法完成只代表请求已送达，原始读写 Promise 的失败仍需处理，也不代表系统 NFC 面板已经收起。
 
 页面应同时禁用读取和写入入口，条件是“本地有未完成调用，或 `isScanning()` / `isWriting()` 任一为 true”。iOS 成功结果可能在系统面板收起前返回，因此不能在 `finally` 中直接恢复按钮；继续查询状态，确认两项都为 false 后再恢复。状态查询失败应显示错误，不按 idle 处理。
+
+`await sfiora.waitForIdle({ timeoutMilliseconds: 5000 })` 可统一完成等待，legacy 的 JS SDK、UTS JS SDK 和直接 UTS API 均支持。超时参数为 1–60000 的整数，默认 5000；查询失败原样返回错误，超时返回 `SESSION_CLOSE_TIMEOUT`，即使查询没有回调也会结束等待。它不取消当前操作、不预留下一次会话，也不会在超时后释放原生占用；用户可刷新真实状态后再试。
+
+原生关闭超过 5 秒时可先交付待处理结果，实际关闭前仍保持忙碌。Android 的读取和初始化判断均使用实时 NDEF 内容，当前空消息不回退到发现时缓存。
 
 拥有当前操作的页面在 `onHide` / `onUnload` 中取消操作，并忽略页面离开后的迟到结果。不要让没有发起操作的页面随意取消另一个页面的会话。原生读写在进程内互斥，重复启动会返回忙错误。
 
@@ -260,6 +265,7 @@ export async function initializeTag() {
 | `NFC_UNSUPPORTED` / `NFC_DISABLED` | 检查硬件支持或引导开启 NFC |
 | `SCAN_BUSY` / `WRITE_BUSY` | 等当前会话释放，避免连续自动重试 |
 | `USER_CANCELLED` | 正常结束这次交互 |
+| `SESSION_CLOSE_TIMEOUT` | 保留原生状态门控，允许刷新，不能假定会话已关闭 |
 | `SCAN_TIMEOUT` / `WRITE_TIMEOUT` / `TAG_LOST` | 调整贴合位置后由用户重试 |
 | `UNSUPPORTED_TAG` / `TAG_READ_ONLY` / `NDEF_CAPACITY_EXCEEDED` | 更换合适的可写 NDEF 标签或缩小消息 |
 | `READ_FAILED` | 检查读取错误，不能按空标签继续处理 |

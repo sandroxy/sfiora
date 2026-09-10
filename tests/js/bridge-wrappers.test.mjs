@@ -93,6 +93,7 @@ async function loadCommonJs(relativePath, requireModule, globals = {}) {
   const context = vm.createContext({
     Error,
     Promise,
+    setTimeout, clearTimeout,
     module,
     exports: module.exports,
     require: requireModule,
@@ -194,6 +195,7 @@ test('React Native wrapper exposes the frozen methods and forwards options', asy
       'isScanning',
       'isWriting',
       'startScan',
+      'waitForIdle',
       'writeNdef',
     ].sort()
   );
@@ -402,6 +404,7 @@ test('UniApp wrapper converts callback envelopes to Promise values', async () =>
       'isScanning',
       'isWriting',
       'startScan',
+      'waitForIdle',
       'writeNdef',
     ].sort()
   );
@@ -518,3 +521,62 @@ test('UniApp wrapper rejects invalid write arguments before bridging', async () 
   );
   assert.equal(invocationCount, 0);
 });
+
+for (const kind of ['React Native', 'UNI legacy']) {
+  async function sessionApi(state) {
+    if (kind === 'React Native') {
+      return loadCommonJs('adapters/react-native/index.js', () => ({
+        NativeModules: { Sfiora: {
+          isScanning: () => state('isScanning'),
+          isWriting: () => state('isWriting'),
+        } },
+      }));
+    }
+    return loadEsModule('adapters/uniapp/index.js', { uni: { requireNativePlugin: () => ({
+      isScanning: callback => respond('isScanning', callback),
+      isWriting: callback => respond('isWriting', callback),
+    }) } });
+    function respond(method, callback) {
+      Promise.resolve().then(() => state(method)).then(
+        data => callback({ ok: true, data }),
+        error => callback({ ok: false, error }),
+      );
+    }
+  }
+
+  test(`${kind} waitForIdle waits for both states and does not cancel`, async () => {
+    let writingQueries = 0;
+    const api = await sessionApi(method => method === 'isScanning' ? false : ++writingQueries < 3);
+    assert.equal(await api.waitForIdle({ timeoutMilliseconds: 500 }), undefined);
+    assert.equal(writingQueries, 3);
+  });
+
+  test(`${kind} waitForIdle stops polling at its deadline without changing native state`, async () => {
+    let queries = 0;
+    const api = await sessionApi(() => { queries += 1; return true; });
+    await assert.rejects(api.waitForIdle({ timeoutMilliseconds: 20 }), { code: 'SESSION_CLOSE_TIMEOUT' });
+    const finalQueries = queries;
+    await new Promise(resolve => setTimeout(resolve, 70));
+    assert.equal(queries, finalQueries);
+  });
+
+  test(`${kind} waitForIdle has a deadline even when a bridge query never settles`, async () => {
+    let finishLate;
+    const query = new Promise(resolve => { finishLate = resolve; });
+    const api = await sessionApi(() => query);
+    await assert.rejects(api.waitForIdle({ timeoutMilliseconds: 10 }), { code: 'SESSION_CLOSE_TIMEOUT' });
+    finishLate(false);
+  });
+
+  test(`${kind} waitForIdle propagates errors and rejects invalid state and options`, async () => {
+    const failed = await sessionApi(() => { throw {code: 'INTERNAL_ERROR', message: 'query failed'}; });
+    await assert.rejects(failed.waitForIdle(), {code: 'INTERNAL_ERROR', message: 'query failed'});
+    const malformed = await sessionApi(() => undefined);
+    await assert.rejects(malformed.waitForIdle(), {code: 'INTERNAL_ERROR'});
+    const idle = await sessionApi(() => false);
+    for (const options of [null, [], 2, {timeoutMilliseconds: null}, {timeoutMilliseconds: '100'}, {timeoutMilliseconds: NaN}, {timeoutMilliseconds: 0}, {timeoutMilliseconds: 1.2}, {timeoutMilliseconds: 60001}]) {
+      await assert.rejects(idle.waitForIdle(options), {code: 'INVALID_OPTIONS'});
+    }
+    await idle.waitForIdle();
+  });
+}

@@ -74,15 +74,6 @@ final class AndroidNdefConnection implements AutoCloseable {
         return convert(technology.getNdefMessage());
     }
 
-    ReadResult readWithCachedFallback()
-            throws IOException, FormatException {
-        android.nfc.NdefMessage platformMessage = technology.getNdefMessage();
-        if (platformMessage == null) {
-            platformMessage = technology.getCachedNdefMessage();
-        }
-        return convert(platformMessage);
-    }
-
     void write(NdefMessage message)
             throws IOException, FormatException, NfcOperationException {
         technology.writeNdefMessage(AndroidNdefCodec.toPlatform(message));

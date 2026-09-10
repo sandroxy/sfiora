@@ -73,3 +73,13 @@ test('classic wrapper discovers the runtime when called after module loading', a
 test('both UNI products ship the canonical JS bridge unchanged', async () => {
   assert.equal(await readFile(new URL('uni_modules/Sandrox-Sfiora/js_sdk/bridge.js', root), 'utf8'), bridge);
 });
+
+test('UTS JS waitForIdle consumes native state without inventing a bridge method', async () => {
+  let writingQueries = 0;
+  const api = await loadTransport('uni_modules/Sandrox-Sfiora/js_sdk/index.js', (method, _json, callback) => {
+    assert.ok(['isScanning', 'isWriting'].includes(method));
+    callback(JSON.stringify({ok: true, data: method === 'isWriting' && ++writingQueries < 2}));
+  });
+  await api.waitForIdle({timeoutMilliseconds: 500});
+  assert.equal(writingQueries, 2);
+});
