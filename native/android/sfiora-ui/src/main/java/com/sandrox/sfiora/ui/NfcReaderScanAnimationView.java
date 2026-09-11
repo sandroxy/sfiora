@@ -1,5 +1,7 @@
 package com.sandrox.sfiora.ui;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -16,7 +18,12 @@ import android.view.animation.LinearInterpolator;
 /** Draws the lightweight, looping device-approach cue used by the managed NFC sheet. */
 public final class NfcReaderScanAnimationView extends View {
     private static final long LOOP_DURATION_MILLIS = 2_600L;
-    private static final long SUCCESS_DURATION_MILLIS = 190L;
+    private static final long PHONE_EXIT_DURATION_MILLIS = 80L;
+    private static final long CHECK_DURATION_MILLIS = 120L;
+    private static final long SUCCESS_DURATION_MILLIS =
+            PHONE_EXIT_DURATION_MILLIS + CHECK_DURATION_MILLIS;
+    private static final float PHONE_EXIT_FRACTION =
+            (float) PHONE_EXIT_DURATION_MILLIS / SUCCESS_DURATION_MILLIS;
     private static final float MAX_PHONE_PITCH_DEGREES = 22.0f;
     private static final float CAMERA_FOCAL_LENGTH_MULTIPLIER = 4.0f;
     private static final float PHONE_DEPTH_TRAVEL_MULTIPLIER = 0.68f;
@@ -44,6 +51,16 @@ public final class NfcReaderScanAnimationView extends View {
     private float phase;
     private float successProgress = -1.0f;
     private float successStartDistance;
+    private Runnable successDrawnAction;
+    private boolean successDrawnPosted;
+    private final Runnable notifySuccessDrawn = () -> {
+        successDrawnPosted = false;
+        Runnable action = successDrawnAction;
+        successDrawnAction = null;
+        if (action != null) {
+            action.run();
+        }
+    };
 
     public NfcReaderScanAnimationView(Context context) {
         this(context, null);
@@ -91,13 +108,14 @@ public final class NfcReaderScanAnimationView extends View {
         startAnimation();
     }
 
-    void playSuccessAnimation() {
+    void playSuccessAnimation(Runnable onSuccessDrawn) {
         if (successProgress >= 0.0f) {
             return;
         }
         successStartDistance = loopDistance();
         stopLoopAnimation();
         successProgress = 0.0f;
+        successDrawnAction = onSuccessDrawn;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !ValueAnimator.areAnimatorsEnabled()) {
@@ -113,14 +131,30 @@ public final class NfcReaderScanAnimationView extends View {
             successProgress = (float) animation.getAnimatedValue();
             invalidate();
         });
+        successAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (successAnimator != animation) {
+                    return;
+                }
+                successAnimator = null;
+                successProgress = 1.0f;
+                invalidate();
+            }
+        });
         successAnimator.start();
     }
 
     void stopAnimation() {
         stopLoopAnimation();
+        removeCallbacks(notifySuccessDrawn);
+        successDrawnAction = null;
+        successDrawnPosted = false;
         if (successAnimator != null) {
-            successAnimator.cancel();
+            ValueAnimator animator = successAnimator;
             successAnimator = null;
+            // cancel() also calls onAnimationEnd; it must not finish a stopped session.
+            animator.cancel();
         }
     }
 
@@ -177,13 +211,13 @@ public final class NfcReaderScanAnimationView extends View {
         float collapse = 0.0f;
         float phoneAlpha = 1.0f;
         if (successProgress >= 0.0f) {
-            collapse = smoothStep(0.0f, 0.66f, successProgress);
+            collapse = smoothStep(0.0f, PHONE_EXIT_FRACTION, successProgress);
             distance = lerp(
                     successStartDistance,
                     1.0f,
-                    smoothStep(0.0f, 0.62f, successProgress)
+                    collapse
             );
-            phoneAlpha = 1.0f - smoothStep(0.14f, 0.66f, successProgress);
+            phoneAlpha = 1.0f - collapse;
         }
 
         drawPhone(
@@ -203,6 +237,13 @@ public final class NfcReaderScanAnimationView extends View {
 
         // The reader ring stays fixed above both the moving device and success stroke.
         canvas.drawCircle(centerX, centerY, ringRadius, ringPaint);
+
+        // Begin the final-state dwell after the complete check has been drawn,
+        // not merely after the animator's nominal duration has elapsed.
+        if (successProgress >= 1.0f && successDrawnAction != null && !successDrawnPosted) {
+            successDrawnPosted = true;
+            post(notifySuccessDrawn);
+        }
     }
 
     private void drawPhone(
@@ -440,7 +481,7 @@ public final class NfcReaderScanAnimationView extends View {
             float ringRadius,
             float progress
     ) {
-        float drawProgress = smoothStep(0.08f, 0.94f, progress);
+        float drawProgress = smoothStep(PHONE_EXIT_FRACTION, 1.0f, progress);
         if (drawProgress <= 0.0f) {
             return;
         }

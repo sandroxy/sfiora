@@ -33,7 +33,7 @@ final class ManagedNfcOperationDialog {
         WRITE
     }
 
-    private static final long SUCCESS_VISIBLE_MILLIS = 230L;
+    private static final long SUCCESS_VISIBLE_MILLIS = 100L;
     private static final long ERROR_VISIBLE_MILLIS = 1_100L;
     private static final long TIMEOUT_VISIBLE_MILLIS = 35L;
 
@@ -56,6 +56,7 @@ final class ManagedNfcOperationDialog {
 
     private ValueAnimator dimAnimator;
     private boolean terminal;
+    private boolean successful;
     private boolean cancellationRequested;
     private boolean dismissing;
 
@@ -121,6 +122,7 @@ final class ManagedNfcOperationDialog {
             return;
         }
         terminal = false;
+        successful = false;
         cancellationRequested = false;
         dismissing = false;
         panelView.setVisibility(View.VISIBLE);
@@ -148,17 +150,17 @@ final class ManagedNfcOperationDialog {
     }
 
     void showSuccess() {
-        if (!dialog.isShowing()) {
+        if (!dialog.isShowing() || terminal || dismissing) {
             return;
         }
         terminal = true;
+        successful = true;
         mainHandler.removeCallbacksAndMessages(this);
         titleView.setText(messages.title);
         messageView.setText(messages.success);
         statusIconView.animate().cancel();
         statusIconView.setVisibility(View.INVISIBLE);
         scanAnimationView.setVisibility(View.VISIBLE);
-        scanAnimationView.playSuccessAnimation();
         closeButton.setVisibility(View.VISIBLE);
         closeButton.setEnabled(true);
         closeButton.setAlpha(1.0f);
@@ -168,7 +170,11 @@ final class ManagedNfcOperationDialog {
         cancelButton.setAlpha(1.0f);
         cancelButton.setText(messages.done);
         cancelButton.setOnClickListener(view -> dismissWithoutCancellation());
-        scheduleDismissal(SUCCESS_VISIBLE_MILLIS);
+        scanAnimationView.playSuccessAnimation(() -> {
+            if (dialog.isShowing() && !dismissing) {
+                scheduleDismissal(SUCCESS_VISIBLE_MILLIS);
+            }
+        });
     }
 
     void showError(NfcError error) {
@@ -212,7 +218,7 @@ final class ManagedNfcOperationDialog {
                 .alpha(1.0f)
                 .scaleX(1.0f)
                 .scaleY(1.0f)
-                .setDuration(160L)
+                .setDuration(successful ? 120L : 160L)
                 .setInterpolator(new PathInterpolator(0.16f, 1.0f, 0.3f, 1.0f))
                 .withEndAction(() -> {
                     if (dialog.isShowing()) {

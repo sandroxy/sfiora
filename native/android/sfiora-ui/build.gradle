@@ -25,6 +25,10 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -34,10 +38,16 @@ android {
 dependencies {
     api project(":sfiora")
     testImplementation "junit:junit:4.13.2"
+    testImplementation "org.robolectric:robolectric:4.16.1"
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.addAll(["-Xlint:all", "-Werror"])
+}
+
+// Robolectric references hidden Android annotations absent from android.jar.
+tasks.withType(JavaCompile).matching { it.name.contains("UnitTest") }.configureEach {
+    options.compilerArgs.add("-Xlint:-classfile")
 }
 
 rootProject.ext.configureSfioraPublication(
