@@ -2,3 +2,10 @@ plugins {
     id "com.android.application" version "8.12.3" apply false
     id "com.android.library" version "8.12.3" apply false
 }
+
+// Keep both architecture builds reusable without writing into the extracted package.
+def architecture = providers.gradleProperty("newArchEnabled").get() == "true" ? "new" : "legacy"
+layout.buildDirectory.set(layout.projectDirectory.dir("build/${architecture}"))
+subprojects {
+    layout.buildDirectory.set(rootProject.layout.buildDirectory.dir(name))
+}
