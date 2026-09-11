@@ -71,11 +71,26 @@ function withSfiora(config, props = {}) {
   );
 
   config = withAndroidManifest(config, (androidConfig) => {
-    AndroidConfig.Permissions.addPermission(
-      androidConfig.modResults,
-      'android.permission.NFC'
-    );
     const manifest = androidConfig.modResults.manifest;
+    let hasNfcPermission = false;
+    manifest['uses-permission'] = (manifest['uses-permission'] || []).filter(
+      (permission) => {
+        if (permission.$?.['android:name'] !== 'android.permission.NFC') {
+          return true;
+        }
+        if (hasNfcPermission) {
+          return false;
+        }
+        hasNfcPermission = true;
+        return true;
+      }
+    );
+    if (!hasNfcPermission) {
+      AndroidConfig.Permissions.addPermission(
+        androidConfig.modResults,
+        'android.permission.NFC'
+      );
+    }
     const features = Array.isArray(manifest['uses-feature'])
       ? manifest['uses-feature']
       : [];

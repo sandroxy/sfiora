@@ -25,8 +25,11 @@ async function loadConfigPlugin(state) {
   const configPlugins = {
     AndroidConfig: {
       Permissions: {
-        addPermission(_manifest, permission) {
+        addPermission(androidManifest, permission) {
           state.androidPermissions.push(permission);
+          const manifest = androidManifest.manifest;
+          manifest['uses-permission'] ||= [];
+          manifest['uses-permission'].push({ $: { 'android:name': permission } });
         },
       },
     },
@@ -101,4 +104,32 @@ test('Expo config plugin emits current iOS NFC entitlement without changing Andr
     ];
   assert.deepEqual(Array.from(formats), ['TAG']);
   assert.equal(formats.includes('NDEF'), false);
+});
+
+test('repeated Expo preparation keeps one NFC permission and removes existing duplicates', async () => {
+  const internet = { $: { 'android:name': 'android.permission.INTERNET' } };
+  const nfc = { $: { 'android:name': 'android.permission.NFC', 'tools:node': 'merge' } };
+  for (const permissions of [[], [internet, nfc, nfc, nfc]]) {
+    const state = {
+      androidManifest: { manifest: { 'uses-permission': [...permissions] } },
+      androidPermissions: [],
+      iosEntitlements: {},
+      iosInfoPlist: {},
+    };
+    const plugin = await loadConfigPlugin(state);
+    for (let run = 0; run < 3; run += 1) {
+      plugin({});
+      const manifest = state.androidManifest.manifest;
+      const matching = manifest['uses-permission'].filter(
+        (permission) => permission.$['android:name'] === 'android.permission.NFC'
+      );
+      assert.equal(matching.length, 1);
+      assert.equal(manifest['uses-feature'].length, 1);
+      if (permissions.length > 0) {
+        assert.equal(manifest['uses-permission'][0], internet);
+        assert.equal(matching[0], nfc);
+      }
+    }
+    assert.equal(state.androidPermissions.length, permissions.length === 0 ? 1 : 0);
+  }
 });
