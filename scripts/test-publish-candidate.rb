@@ -28,7 +28,10 @@ class PublishCandidateTest < Minitest::Test
       path.parent.mkpath
       path.write("fixture input\n") unless path.file?
     end
-    package = source.join("Package.swift").read.sub(/let sfioraBinaryChecksum =\s*"[0-9a-f]+"/,
+    package = source.join("Package.swift").read
+    # This synthetic release stays at 1.0.0 when the public Swift package advances.
+    package.sub!(/let sfioraVersion =\s*"[^"]+"/, 'let sfioraVersion = "1.0.0"')
+    package.sub!(/let sfioraBinaryChecksum =\s*"[0-9a-f]+"/,
       "let sfioraBinaryChecksum = \"#{Digest::SHA256.hexdigest("native-ios-xcframework\n")}\"")
     @product.join("Package.swift").write(package)
     # Exercise the actual publication gate with synthetic artifacts, without native compilation.
