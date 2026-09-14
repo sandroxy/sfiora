@@ -31,19 +31,28 @@ id and invalidate previous acceptance results.
 
 ## Documentation
 
-The root Chinese and English READMEs are consumer installation guides. Keep
-their platform coverage, native examples, and behavior descriptions aligned.
-Adapter READMEs describe complete integration, request/result semantics,
+The root Chinese and English READMEs introduce the product and link to consumer
+guides. Keep their platform coverage, distribution links, and behavior
+descriptions aligned. Native and adapter READMEs describe complete integration,
+request/result semantics,
 lifecycle handling, and platform limits. Public documentation must follow the
 shipped APIs and must not depend on a business host or an internal test page.
 
 Keep product-version literals in `plugin.json`, package manifests, changelogs,
 and release records; use `<version>` in stable installation examples. Framework
 and operating-system requirements remain explicit in consumer documentation.
+Historical archive-naming notes may name versions to distinguish the immutable
+filenames that users actually download.
 Maintain release notes once in `CHANGELOG.md`. Packaging copies that file into
 RN and legacy packages as `CHANGELOG.md`, and into the UTS package as
 `changelog.md`. The UTS `readme.md` is copied from `adapters/uniapp/README.md`;
 edit its source rather than a generated consumer or a second market-only guide.
+
+Before recording a release candidate, finalize its changelog entry and remove
+the pending-release label. Summarize observable behavior, including UI changes,
+and check the actual release date when publication completes. Run
+`ruby scripts/verify-documentation.rb` and follow the source-check and example
+validation instructions in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 Finalize packaged documentation before recording a candidate. Documentation
 inside an npm tarball or UNI ZIP is part of that artifact's identity. Updating
@@ -259,6 +268,14 @@ packaged `readme.md`; no second manual copy is needed. Keep executable files
 unchanged. HBuilderX may write back market metadata and changelog dates. Verify
 the public Marketplace installation separately in the test repository. The
 legacy ZIP remains a compatibility/offline artifact.
+
+Keep lasting market declarations in the source
+[`package.json`](uni_modules/Sandrox-Sfiora/package.json). If HBuilderX changes
+those declarations in the consumer copy, reconcile the reviewed capability
+fields back to the source for future packages. A platform's `extVersion` describes
+its supported plugin version; do not automatically replace every historical
+platform declaration with the newest product version. Market-generated dates
+and formatting do not make the consumer copy a second documentation source.
 
 Run **Verify UniApp Release Assets** from the updated default branch with the
 release `version` and the accepted `uts_sha256` and `legacy_sha256` printed by

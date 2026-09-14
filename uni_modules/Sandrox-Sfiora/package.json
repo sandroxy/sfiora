@@ -36,9 +36,9 @@
       "permissions": "Android NFC 权限；iOS NFCReaderUsageDescription 和 TAG entitlement。"
     },
     "npmurl": "",
-    "darkmode": "-",
-    "i18n": "-",
-    "widescreen": "-"
+    "darkmode": "√",
+    "i18n": "x",
+    "widescreen": "x"
   },
   "uni_modules": {
     "dependencies": [],
@@ -81,7 +81,8 @@
             "jd": "x",
             "harmony": "x",
             "qq": "x",
-            "lark": "x"
+            "lark": "x",
+            "xhs": "x"
           },
           "quickapp": {
             "huawei": "x",

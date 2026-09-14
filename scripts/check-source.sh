@@ -5,6 +5,7 @@ root="$(cd "${script_dir}/.." && pwd)"
 [[ $# -eq 0 ]] || { echo "Usage: $0" >&2; exit 1; }
 cd "${root}"
 git diff --check
+ruby scripts/verify-documentation.rb
 bash scripts/verify-release-metadata.sh --allow-pending-ios
 bash scripts/sync-uniapp-js.sh --check
 node --test tests/js/*.test.mjs

@@ -20,7 +20,9 @@ NFC 操作需要支持 NFC 的真机。本文的 uni-app x 示例面向 Vapor；
 
 ### UTS：经典 uni-app 与 uni-app x
 
-通过 DCloud 插件市场导入 `Sandrox-Sfiora`，或者下载对应发行版的 UTS ZIP。将 ZIP 内的文件解压到 `uni_modules/Sandrox-Sfiora`，确认 `package.json` 直接位于该目录中，避免再嵌套一层同名目录。
+从 [DCloud 插件市场](https://ext.dcloud.net.cn/plugin?name=Sandrox-Sfiora) 导入 `Sandrox-Sfiora`，或者从 [GitHub Releases](https://github.com/sandroxy/sfiora/releases) 下载 `sfiora-uniapp-<version>.zip`。将 ZIP 内的文件解压到 `uni_modules/Sandrox-Sfiora`，确认 `package.json` 直接位于该目录中，避免再嵌套一层同名目录。
+
+`<version>` 替换为所选发行版本。从 1.1.0 起，无后缀的 UNI ZIP 是经典 uni-app 与 uni-app x 共用的 UTS 包，带 `-legacy` 的 ZIP 是经典原生插件。历史 1.0.0 的 UTS 文件名为 `sfiora-uniapp-uts-1.0.0.zip`，无后缀文件为 legacy；安装历史版本时按该 Release 的说明选择。
 
 两种宿主都使用下面的公共 JavaScript SDK：
 
@@ -40,7 +42,7 @@ import * as sfiora from '@/uni_modules/Sandrox-Sfiora'
 
 ### Legacy：经典 uni-app 原生插件
 
-下载发行版的 legacy ZIP，将其中的 `Sandrox-Sfiora` 目录放入项目的 `nativeplugins`，然后在 `manifest.json` 的 App 原生插件配置中选择这个本地插件。
+从 [GitHub Releases](https://github.com/sandroxy/sfiora/releases) 下载 `sfiora-uniapp-legacy-<version>.zip`，将其中的 `Sandrox-Sfiora` 目录放入项目的 `nativeplugins`，然后在 `manifest.json` 的 App 原生插件配置中选择这个本地插件。
 
 ```js
 import * as sfiora from '@/nativeplugins/Sandrox-Sfiora/js_sdk/index.js';

@@ -27,209 +27,18 @@ NFC 读写需要支持 NFC 的真机与合适标签。模拟器可以用于界�
 | iOS | [Swift Package](https://github.com/sandroxy/sfiora)，产品 `Sfiora` | iOS 13 |
 | React Native / Expo | [npm](https://www.npmjs.com/package/@sandrox/sfiora)，`@sandrox/sfiora`；[接入说明](adapters/react-native/README.md) | RN 0.76+，系统要求同时取决于宿主 |
 | 经典 uni-app legacy | GitHub Release 的原生插件 ZIP；[接入说明](adapters/uniapp/README.md) | HBuilderX 5.24，Android API 21 / iOS 13 |
-| 经典 uni-app UTS | `Sandrox-Sfiora` uni_modules；[接入说明](adapters/uniapp/README.md) | HBuilderX 5.24，Android API 21 / iOS 13 |
-| uni-app x | 同一 UTS 包，Vapor；[接入说明](adapters/uniapp/README.md) | HBuilderX 5.24，Android API 23 / iOS 15 |
+| 经典 uni-app UTS | [DCloud 插件市场](https://ext.dcloud.net.cn/plugin?name=Sandrox-Sfiora)，`Sandrox-Sfiora`；[接入说明](adapters/uniapp/README.md) | HBuilderX 5.24，Android API 21 / iOS 13 |
+| uni-app x | [同一市场 UTS 包](https://ext.dcloud.net.cn/plugin?name=Sandrox-Sfiora)，Vapor；[接入说明](adapters/uniapp/README.md) | HBuilderX 5.24，Android API 23 / iOS 15 |
 
 各渠道已上架版本以对应渠道页面为准。版本记录见 [CHANGELOG.md](CHANGELOG.md)，离线 AAR、XCFramework、RN 包和 UNI ZIP 见 [GitHub Releases](https://github.com/sandroxy/sfiora/releases)。示例中的 `<version>` 请替换为所选公开版本。
 
-## Android 原生接入
+## 原生接入
 
-在依赖仓库中启用 Maven Central，按需添加核心和 UI：
+Android 在 Maven Central 添加 `io.github.sandroxy:sfiora:<version>`，需要操作面板时再添加同版本 `sfiora-ui`。完整 Activity 示例、面板接入、参数和错误处理见 [Android 指南](native/android/README.md)。
 
-```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-```
+iOS 在 Xcode 添加 Swift Package `https://github.com/sandroxy/sfiora.git`，选择公开版本并链接 `Sfiora` 产品。权限、签名、读写示例和系统会话状态处理见 [iOS 指南](native/ios/README.md)。
 
-```kotlin
-dependencies {
-    implementation("io.github.sandroxy:sfiora:<version>")
-    implementation("io.github.sandroxy:sfiora-ui:<version>") // optional
-}
-```
-
-`sfiora` 提供无界面读写；`sfiora-ui` 提供可选操作面板并依赖同版本核心。RN 和 UNI 包已包含所需运行时，使用它们时无须再手动接入原生核心。
-
-库 Manifest 声明 NFC 权限并将硬件设为可选。操作前用 `client.getCapabilities()` 检查能力；无 NFC 或 NFC 关闭的设备仍可进入应用，由应用提供相应提示。
-
-以下 Activity 示例展示三种操作和生命周期。将 `readTag`、`replaceTag`、`initializeTag`、`cancel` 接到自己的按钮；示例不定义页面布局。
-
-```java
-import android.app.Activity;
-import android.os.Bundle;
-import android.widget.Toast;
-import com.sandrox.sfiora.*;
-import java.util.Collections;
-
-public final class NfcActivity extends Activity {
-    private NfcClient client;
-
-    @Override protected void onCreate(Bundle state) {
-        super.onCreate(state);
-        client = new NfcClient(this);
-    }
-
-    public void readTag() {
-        client.startRead(NfcReadConfiguration.builder().build(),
-            new NfcClient.ReadCallback() {
-                @Override public void onSuccess(NfcTagSnapshot tag) {
-                    show(tag.toPrettyJsonString());
-                }
-                @Override public void onFailure(NfcError error) {
-                    show(error.getCode().getValue() + ": " + error.getMessage());
-                }
-            });
-    }
-
-    public void replaceTag() {
-        NdefMessage message = new NdefMessage(Collections.singletonList(
-            NdefRecord.text("Hello from Sfiora", "en")));
-        client.startWrite(message, NfcWriteConfiguration.builder().build(),
-            new NfcClient.WriteCallback() {
-                @Override public void onSuccess(NfcWriteResult result) {
-                    show("Verified bytes: " + result.getBytesWritten());
-                }
-                @Override public void onFailure(NfcError error) {
-                    show(error.getCode().getValue() + ": " + error.getMessage());
-                }
-            });
-    }
-
-    public void initializeTag() {
-        NdefExternalType marker = new NdefExternalType("example.com", "initialized");
-        NdefMessage message = new NdefMessage(Collections.singletonList(
-            NdefRecord.external(marker.getDomain(), marker.getType(), new byte[]{1, 2, 3})));
-        client.startInitialize(message, marker, NfcWriteConfiguration.builder().build(),
-            new NfcClient.InitializationCallback() {
-                @Override public void onSuccess(NfcInitializationResult result) {
-                    show(result.getAction().name());
-                }
-                @Override public void onFailure(NfcError error) {
-                    show(error.getCode().getValue() + ": " + error.getMessage());
-                }
-            });
-    }
-
-    public void cancel() {
-        client.cancelRead();
-        client.cancelWrite();
-    }
-
-    private void show(String text) {
-        Toast.makeText(this, text, Toast.LENGTH_LONG).show();
-    }
-
-    @Override protected void onPause() {
-        client.stop();
-        super.onPause();
-    }
-
-    @Override protected void onDestroy() {
-        client.close();
-        super.onDestroy();
-    }
-}
-```
-
-回调在主线程执行。页面离开前调用 `stop()`，不再使用时调用 `close()`；`stop()` 是静默停止，不会补发成功/失败回调。用户主动取消则用 `cancelRead()` / `cancelWrite()` 并处理取消结果。
-
-`NfcReadConfiguration.builder()` 默认 `AUTOMATIC`、30 秒超时；可选择 `NDEF` 或 `DISCOVER`，超时范围为 1–60 秒。`NfcWriteConfiguration` 使用相同超时范围。读取前先启动操作，再贴标签，避免空闲时被系统的标签分发接管。
-
-需要 Android 操作面板时，使用 `com.sandrox.sfiora.ui.NfcScanController.startScan(configuration, NfcScanPresentation.MANAGED, callback)` 和 `NfcWriteController.startWrite` / `startInitialize`；回调类型与核心一致。两种 controller 都用当前 Activity 创建并持有，页面离开时分别调用 `stopScan()` / `stopWrite()`，销毁时 `close()`。
-
-## iOS 原生接入
-
-在 Xcode 的 **File > Add Package Dependencies** 中添加：
-
-```text
-https://github.com/sandroxy/sfiora.git
-```
-
-选择公开发行版本，并把 `Sfiora` 产品链接到 App target。Swift Package 会下载该版本的 XCFramework 并验证 checksum。
-
-在 App 的 `Info.plist` 中设置符合实际用途的说明：
-
-```xml
-<key>NFCReaderUsageDescription</key>
-<string>Read and write NFC tags selected by you.</string>
-```
-
-在 **Signing & Capabilities** 中启用 **Near Field Communication Tag Reading**，确认 App ID 和签名描述文件包含同一能力，最终签名的 entitlement 包含：
-
-```xml
-<key>com.apple.developer.nfc.readersession.formats</key>
-<array>
-    <string>TAG</string>
-</array>
-```
-
-下列控制器持有客户端；将方法接到前台页面的用户操作。`replaceTag` / `initializeTag` 会抛出参数构造错误，调用处用 `do/catch` 处理；NFC 操作结果通过 completion 返回。
-
-```swift
-import UIKit
-import Sfiora
-
-final class NfcViewController: UIViewController {
-    private let client = NfcClient()
-
-    func readTag() {
-        client.startRead { result in
-            switch result {
-            case .success(let tag):
-                print(tag.ndefStatus.rawValue)
-                if let message = tag.ndefMessage { print(message.records.count) }
-                if let error = tag.ndefReadError { print(error.message) }
-            case .failure(let error):
-                print(error.code.rawValue, error.message)
-            }
-        }
-    }
-
-    func replaceTag() throws {
-        let message = try NdefMessage(records: [
-            try NdefRecord.text("Hello from Sfiora", languageCode: "en")
-        ])
-        client.startWrite(message: message) { result in
-            switch result {
-            case .success(let value): print(value.bytesWritten)
-            case .failure(let error): print(error.code.rawValue, error.message)
-            }
-        }
-    }
-
-    func initializeTag() throws {
-        let marker = try NdefExternalType(domain: "example.com", type: "initialized")
-        let message = try NdefMessage(records: [
-            try NdefRecord.external(
-                domain: marker.domain, type: marker.type, payload: Data([1, 2, 3]))
-        ])
-        try client.startInitialize(message: message, marker: marker) { result in
-            switch result {
-            case .success(let value): print(value.action.rawValue)
-            case .failure(let error): print(error.code.rawValue, error.message)
-            }
-        }
-    }
-
-    func cancel() {
-        client.cancelRead()
-        client.cancelWrite()
-    }
-
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        client.stop()
-    }
-}
-```
-
-回调和 `stateChangeHandler` 在主线程执行。成功 completion 可能早于系统面板收起；用 `client.state == .idle` 决定是否恢复入口，不要只依据 completion。页面离开时 `stop()` 静默终止，主动取消用 `cancelRead()` / `cancelWrite()`。
-
-默认读取配置为 `.automatic`、30 秒、轮询 ISO 14443 与 ISO 15693。`.ndef` 使用系统 NDEF 兼容读取，可能不提供标签 ID；`.discover` 不主动查询 NDEF。FeliCa 需要显式启用 `.iso18092` 并提供相应系统码，ISO 7816 的 AID 也由宿主按支持的标签配置。这些发现配置不提供任意协议写入能力。
+RN 和 UNI 包已包含所需原生运行时，无须再单独添加 Maven 或 Swift Package 依赖。各平台指南包含对应宿主的安装与生命周期要求。
 
 ## 读写结果与保留规则
 
@@ -255,7 +64,7 @@ final class NfcViewController: UIViewController {
 
 原生关闭等待超过 5 秒时可先交付待处理结果，但忙碌状态会保留到实际关闭；不能只凭成功或失败回调恢复入口。Android 普通读取与初始化判断均使用实时 NDEF 结果，不以发现时缓存替代当前空消息。
 
-按稳定错误码处理结果，保留原生错误供排查。`recoverable` 只表达可重试性，不保证标签内容未变。完整 API、选项与错误说明见 [RN 使用说明](adapters/react-native/README.md) 和 [UNI 使用说明](adapters/uniapp/README.md)；共享类型见 [contract/types.ts](contract/types.ts)。
+按稳定错误码处理结果，保留原生错误供排查。`recoverable` 只表达可重试性，不保证标签内容未变。原生 API、选项与错误说明见 [Android 指南](native/android/README.md) 和 [iOS 指南](native/ios/README.md)，桥接接口见 [RN 使用说明](adapters/react-native/README.md) 和 [UNI 使用说明](adapters/uniapp/README.md)；共享类型见 [contract/types.ts](contract/types.ts)。
 
 - 模块不存在：确认原生依赖已加入并重新构建 App；Expo Go 和不含插件的标准基座无法运行。
 - iOS 无法开始会话：检查用途说明、NFC capability、实际签名 entitlement 和描述文件。
@@ -265,7 +74,7 @@ final class NfcViewController: UIViewController {
 
 ## 维护与反馈
 
-构建、候选制品和发布流程见 [RELEASING.md](RELEASING.md)。反馈问题时请提供版本、平台、宿主形态、操作、错误码和相关原生错误，通过 [Issues](https://github.com/sandroxy/sfiora/issues) 提交；去除私密标签数据。安全问题按 [SECURITY.md](SECURITY.md) 报告。
+本地开发、源码测试、环境要求和构建目录管理见 [DEVELOPMENT.md](DEVELOPMENT.md)；候选制品与发布流程见 [RELEASING.md](RELEASING.md)。反馈问题时请提供版本、平台、宿主形态、操作、错误码和相关原生错误，通过 [Issues](https://github.com/sandroxy/sfiora/issues) 提交；去除私密标签数据。安全问题按 [SECURITY.md](SECURITY.md) 报告。
 
 ## 隐私与许可
 
