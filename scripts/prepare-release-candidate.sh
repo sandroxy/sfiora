@@ -42,15 +42,15 @@ ui_aar="${sfiora_root}/dist/native-android/sfiora-ui-${sfiora_version}.aar"
 maven_repository="${sfiora_root}/dist/native-android/sfiora-${sfiora_version}-maven.zip"
 ios_framework="${sfiora_root}/dist/native-ios/sfiora-${sfiora_version}.xcframework.zip"
 react_native_package="${sfiora_root}/dist/react-native/sandrox-sfiora-${sfiora_version}.tgz"
-uniapp_package="${sfiora_root}/dist/uniapp/sfiora-uniapp-${sfiora_version}.zip"
-uniapp_uts_package="${sfiora_root}/dist/uniapp/sfiora-uniapp-uts-${sfiora_version}.zip"
+uniapp_legacy_package="${sfiora_root}/dist/uniapp/sfiora-uniapp-legacy-${sfiora_version}.zip"
+uniapp_uts_package="${sfiora_root}/dist/uniapp/sfiora-uniapp-${sfiora_version}.zip"
 artifacts=(
     "${core_aar}"
     "${ui_aar}"
     "${maven_repository}"
     "${ios_framework}"
     "${react_native_package}"
-    "${uniapp_package}"
+    "${uniapp_legacy_package}"
     "${uniapp_uts_package}"
 )
 
@@ -94,8 +94,8 @@ fi
 
 react_native_metadata="$(tar -xOf "${react_native_package}" package/package.json)"
 react_native_provenance="$(tar -xOf "${react_native_package}" package/sfiora-artifacts.json)"
-uniapp_metadata="$(unzip -p "${uniapp_package}" "${sfiora_uniapp_id}/package.json")"
-uniapp_provenance="$(unzip -p "${uniapp_package}" "${sfiora_uniapp_id}/sfiora-artifacts.json")"
+uniapp_metadata="$(unzip -p "${uniapp_legacy_package}" "${sfiora_uniapp_id}/package.json")"
+uniapp_provenance="$(unzip -p "${uniapp_legacy_package}" "${sfiora_uniapp_id}/sfiora-artifacts.json")"
 ruby -rjson -rdigest -e '
   version, rn_package, rn_provenance, uni_package, uni_provenance,
     core, ui, ios = ARGV
@@ -127,7 +127,7 @@ ruby -rjson -rdigest -e '
 
 ruby "${script_dir}/verify-adapter-provenance.rb" \
     "${sfiora_root}" "${sfiora_version}" \
-    "${react_native_package}" "${uniapp_package}" "${uniapp_uts_package}"
+    "${react_native_package}" "${uniapp_legacy_package}" "${uniapp_uts_package}"
 
 commit="$(git -C "${sfiora_root}" rev-parse HEAD)"
 dirty=false
@@ -167,7 +167,7 @@ snapshot_arguments=(
     --artifact "native-android-maven-repository=${maven_repository}"
     --artifact "native-ios-xcframework=${ios_framework}"
     --artifact "react-native-package=${react_native_package}"
-    --artifact "uniapp-legacy-package=${uniapp_package}"
+    --artifact "uniapp-legacy-package=${uniapp_legacy_package}"
     --artifact "uniapp-uts-package=${uniapp_uts_package}"
     --artifact "native-build-manifest=${native_manifest}"
     --artifact "native-build-checksums=${native_checksums}"
@@ -184,7 +184,7 @@ sidecar_artifacts=(
     "native-android-maven-repository=${maven_repository}"
     "native-ios-xcframework=${ios_framework}"
     "react-native-package=${react_native_package}"
-    "uniapp-legacy-package=${uniapp_package}"
+    "uniapp-legacy-package=${uniapp_legacy_package}"
     "uniapp-uts-package=${uniapp_uts_package}"
 )
 for artifact_spec in "${sidecar_artifacts[@]}"; do

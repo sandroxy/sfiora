@@ -90,10 +90,10 @@ SFIORA_IOS_ACCEPTED_SOURCE_COMMIT="${SFIORA_IOS_SOURCE_COMMIT}" \
   ./scripts/prepare-native-release.sh
 ./scripts/package-react-native.sh
 ./scripts/package-uniapp.sh
-./scripts/package-uniapp-uts.sh
+./scripts/package-uniapp-legacy.sh
 ./scripts/verify-react-native.sh
 ./scripts/verify-uniapp.sh
-./scripts/verify-uniapp-uts.sh
+./scripts/verify-uniapp-legacy.sh
 ./scripts/prepare-release-candidate.sh
 ```
 
@@ -204,7 +204,12 @@ accepted files initially:
 - `sfiora-native-<version>.json`
 - `sandrox-sfiora-<version>.tgz` and its `.sha256`
 - `sfiora-uniapp-<version>.zip` and its `.sha256`
-- `sfiora-uniapp-uts-<version>.zip` and its `.sha256`
+- `sfiora-uniapp-legacy-<version>.zip` and its `.sha256`
+
+From 1.1.0, the default UNI archive is the UTS module shared by classic uni-app
+and uni-app x; the `-legacy` archive is the classic native plugin. The published
+1.0.0 files retain their original names: `sfiora-uniapp-1.0.0.zip` for legacy and
+`sfiora-uniapp-uts-1.0.0.zip` for UTS.
 
 The local Maven ZIP goes to Central Portal. Android AARs and their sidecars are
 added by the mirror workflow after Maven Central publication. The XCFramework

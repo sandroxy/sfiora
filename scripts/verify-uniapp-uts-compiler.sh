@@ -5,7 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 plugin_dir="$(cd "${script_dir}/.." && pwd)"
 source "${script_dir}/release-common.sh"
 version="${sfiora_version}"
-archive_path="${1:-${plugin_dir}/dist/uniapp/sfiora-uniapp-uts-${version}.zip}"
+archive_path="${1:-${plugin_dir}/dist/uniapp/sfiora-uniapp-${version}.zip}"
 [[ $# -le 1 ]] || { echo "Usage: $0 [ARCHIVE]" >&2; exit 1; }
 sfiora_verify_checksum "${archive_path}"
 hbuilder_contents="${HBUILDERX_CONTENTS:-/Applications/HBuilderX.app/Contents/HBuilderX}"

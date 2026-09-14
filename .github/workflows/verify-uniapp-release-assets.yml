@@ -66,11 +66,17 @@ jobs:
             | jq -e --arg version "$VERSION" \
               '.isDraft == false and .isPrerelease == false and .tagName == $version' >/dev/null
           mkdir -p dist
+          uts_archive="sfiora-uniapp-$VERSION.zip"
+          legacy_archive="sfiora-uniapp-legacy-$VERSION.zip"
+          if [[ "$VERSION" == "1.0.0" ]]; then
+            uts_archive="sfiora-uniapp-uts-$VERSION.zip"
+            legacy_archive="sfiora-uniapp-$VERSION.zip"
+          fi
           gh release download "$VERSION" --repo "$GITHUB_REPOSITORY" \
-            --pattern "sfiora-uniapp-$VERSION.zip" \
-            --pattern "sfiora-uniapp-$VERSION.zip.sha256" \
-            --pattern "sfiora-uniapp-uts-$VERSION.zip" \
-            --pattern "sfiora-uniapp-uts-$VERSION.zip.sha256" \
+            --pattern "$uts_archive" \
+            --pattern "$uts_archive.sha256" \
+            --pattern "$legacy_archive" \
+            --pattern "$legacy_archive.sha256" \
             --pattern "sfiora-native-$VERSION.json" \
             --pattern "sfiora-$VERSION.xcframework.zip" --dir dist
           for artifact in sfiora sfiora-ui; do

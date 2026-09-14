@@ -26,14 +26,14 @@ class ReleaseAssetsTest(unittest.TestCase):
         self.source.mkdir()
         self.artifacts = self.root / "artifacts"
         self.artifacts.mkdir()
-        self.version = "1.0.0"
+        self.version = "1.1.0"
         self.android = {"sfiora.aar": b"accepted core", "sfiora-ui.aar": b"accepted UI"}
         self.bridge = b"accepted shared bridge"
         self.ios_files = {
             "Sfiora.xcframework/ios-arm64/Sfiora.framework/Sfiora": b"device",
             "Sfiora.xcframework/ios-arm64_x86_64-simulator/Sfiora.framework/Sfiora": b"simulator",
         }
-        self.ios_path = self.artifacts / "sfiora-1.0.0.xcframework.zip"
+        self.ios_path = self.artifacts / f"sfiora-{self.version}.xcframework.zip"
         self.write_zip(self.ios_path, self.ios_files)
         metadata = {"name": "@sandrox/sfiora", "version": self.version,
                     "repository": {"url": "https://github.com/sandroxy/sfiora.git"}}
@@ -56,7 +56,7 @@ class ReleaseAssetsTest(unittest.TestCase):
             path.write_bytes(data)
         self.git("init", "-q")
         self.git("add", ".")
-        self.npm_path = self.artifacts / "sandrox-sfiora-1.0.0.tgz"
+        self.npm_path = self.artifacts / f"sandrox-sfiora-{self.version}.tgz"
         self.npm_files = release.rn_sources(self.source)
         self.npm_files.update({"android/libs/" + name: data for name, data in self.android.items()})
         self.npm_files["android/libs/sfiora-bridge-support.aar"] = self.bridge
@@ -155,7 +155,7 @@ class ReleaseAssetsTest(unittest.TestCase):
         with self.assertRaisesRegex(release.VerificationError, "Duplicate"):
             release.read_archive(path)
 
-    def test_both_uni_modes_match_the_accepted_hashes_and_native_bytes(self):
+    def write_uniapp(self, filenames):
         hashes = {}
         for legacy in (False, True):
             prefix = "Sandrox-Sfiora/" if legacy else ""
@@ -164,21 +164,37 @@ class ReleaseAssetsTest(unittest.TestCase):
             files = {prefix + "package.json": json.dumps(package).encode(),
                      prefix + "sfiora-artifacts.json": self.provenance(legacy)}
             android_dir = "android" if legacy else "utssdk/app-android/libs"
-            names = ({"Sfiora-1.0.0": self.android["sfiora.aar"], "SfioraUI-1.0.0": self.android["sfiora-ui.aar"],
+            names = ({f"Sfiora-{self.version}": self.android["sfiora.aar"], f"SfioraUI-{self.version}": self.android["sfiora-ui.aar"],
                       "SfioraBridgeSupport": self.bridge, "SfioraUniApp": b"legacy bridge"} if legacy else
                      {"sfiora": self.android["sfiora.aar"], "sfiora-ui": self.android["sfiora-ui.aar"],
                       "sfiora-bridge-support": self.bridge})
             files.update({prefix + android_dir + "/" + name + ".aar": data for name, data in names.items()})
             ios_dir = "ios" if legacy else "utssdk/app-ios/Frameworks"
             files[prefix + ios_dir + "/Sfiora.framework/Sfiora"] = b"device"
-            path = self.artifacts / f"sfiora-uniapp{'-uts' if not legacy else ''}-1.0.0.zip"
+            path = self.artifacts / filenames[legacy]
             self.write_zip(path, files)
             hashes[legacy] = release.digest(path.read_bytes())
+        return hashes
+
+    def test_both_uni_modes_match_the_accepted_hashes_and_native_bytes(self):
+        hashes = self.write_uniapp({False: "sfiora-uniapp-1.1.0.zip", True: "sfiora-uniapp-legacy-1.1.0.zip"})
         release.verify_uniapp(self.artifacts, self.version, self.android, self.ios_path, self.ios_files,
                               hashes[False], hashes[True])
         with self.assertRaisesRegex(release.VerificationError, "Accepted SHA-256 differs"):
             release.verify_uniapp(self.artifacts, self.version, self.android, self.ios_path, self.ios_files,
                                   hashes[False], "0" * 64)
+
+    def test_published_1_0_0_uni_names_remain_verifiable(self):
+        self.version = "1.0.0"
+        hashes = self.write_uniapp({False: "sfiora-uniapp-uts-1.0.0.zip", True: "sfiora-uniapp-1.0.0.zip"})
+        release.verify_uniapp(self.artifacts, self.version, self.android, self.ios_path, self.ios_files,
+                              hashes[False], hashes[True])
+
+    def test_old_filename_convention_is_rejected_for_1_1_0(self):
+        hashes = self.write_uniapp({False: "sfiora-uniapp-uts-1.1.0.zip", True: "sfiora-uniapp-1.1.0.zip"})
+        with self.assertRaisesRegex(release.VerificationError, "Accepted SHA-256 differs"):
+            release.verify_uniapp(self.artifacts, self.version, self.android, self.ios_path, self.ios_files,
+                                  hashes[False], hashes[True])
 
 
 if __name__ == "__main__":

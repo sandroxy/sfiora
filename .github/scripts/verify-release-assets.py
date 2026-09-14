@@ -227,7 +227,10 @@ def verify_npm(source, artifacts, version, android, ios_path, ios_files):
 
 def verify_uniapp(artifacts, version, android, ios_path, ios_files, uts_sha256, legacy_sha256):
     for legacy, expected in ((False, uts_sha256), (True, legacy_sha256)):
-        filename = f"sfiora-uniapp{'-uts' if not legacy else ''}-{version}.zip"
+        suffix = "-legacy" if legacy else ""
+        if version == "1.0.0":
+            suffix = "" if legacy else "-uts"
+        filename = f"sfiora-uniapp{suffix}-{version}.zip"
         path = artifacts / filename
         verify_sidecar(path, expected)
         files = read_archive(path)
