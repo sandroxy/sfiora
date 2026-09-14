@@ -81,18 +81,12 @@ class DocumentationVerification
 
     paths.each do |path|
       (guides + channels).each { |target| require_text(path, "](#{target})") }
-      require_row(path, "Android", ["API #{android.fetch('minimumSdk')}"])
-      require_row(path, "iOS", ["iOS #{ios}"])
-      require_row(path, "React Native / Expo", ["RN #{adapters.fetch('reactNative').fetch('minimumVersion')}+"])
-      classic = path == "README.md" ? "经典 uni-app" : "Classic uni-app"
-      %w[legacy UTS].each do |kind|
-        adapter = kind == "legacy" ? "uniApp" : "uniAppUts"
-        require_row(path, "#{classic} #{kind}", ["Android API #{android.fetch('minimumSdk')}", "iOS #{ios}",
-                    "HBuilderX #{adapters.fetch(adapter).fetch('minimumHBuilderX')}"])
-      end
-      require_row(path, "uni-app x", ["Android API #{x_app.fetch('android').fetch('minVersion')}",
-                  "iOS #{x_app.fetch('ios').fetch('minVersion')}",
-                  "HBuilderX #{adapters.fetch('uniAppUts').fetch('minimumHBuilderX')}"])
+      # Landing tables help readers choose a channel and guide. Check version
+      # requirements in the platform guides, where the host distinctions belong.
+      require_row(path, "Android", ["](#{channels[0]})", "](native/android/README.md)"])
+      require_row(path, "iOS", ["](#{channels[1]})", "](native/ios/README.md)"])
+      require_row(path, "React Native / Expo", ["](#{channels[2]})", "](adapters/react-native/README.md)"])
+      require_row(path, "UniApp", ["](#{marketplace})", "](adapters/uniapp/README.md)"])
     end
     require_text("native/android/README.md", "Requires Android API #{android.fetch('minimumSdk')}")
     require_text("native/ios/README.md", "Requires iOS #{ios}")
@@ -108,6 +102,8 @@ class DocumentationVerification
     require_text("adapters/react-native/README.md", "Node.js #{node_minimum}+")
 
     %w[legacy UTS].each do |kind|
+      adapter = kind == "legacy" ? "uniApp" : "uniAppUts"
+      require_text("adapters/uniapp/README.md", "HBuilderX #{adapters.fetch(adapter).fetch('minimumHBuilderX')}")
       require_row("adapters/uniapp/README.md", "经典 uni-app #{kind}",
                   ["Android API #{android.fetch('minimumSdk')}", "iOS #{ios}"])
     end

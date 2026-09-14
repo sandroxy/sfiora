@@ -1,8 +1,16 @@
 # @sandrox/sfiora
 
 Read NFC tags, replace NDEF messages with read-back verification, and preserve
-previously initialized tags on Android and iOS. The package includes the native
-Sfiora runtimes and supports React Native's legacy architecture and TurboModules.
+messages containing an application marker on Android and iOS. The package
+includes the native Sfiora runtimes and supports React Native's legacy
+architecture and TurboModules.
+
+## Requirements
+
+The package requires Node.js 18+ and React Native 0.76+. The native Sfiora cores
+target Android API 21 and iOS 13; the host must also meet its React Native and
+Expo requirements. For example, [React Native 0.76 requires Android API 24 and iOS 15.1](https://reactnative.dev/blog/2024/10/23/release-0.76-new-architecture#updates-to-minimum-ios-and-android-sdk-requirements).
+Do not lower the host's deployment target to the core minimum.
 
 ## Install
 
@@ -79,10 +87,30 @@ signed app's entitlements must contain:
 Keep the App ID, signing profile, and entitlements consistent. FeliCa polling
 also needs the applicable system codes in `Info.plist`.
 
+## API overview
+
+Every method returns a Promise. Request fields and result types are defined in
+[index.d.ts](index.d.ts); the following sections show complete calls.
+
+| Method | Purpose |
+| --- | --- |
+| `getCapabilities` | Query NFC support and whether it is enabled |
+| `startScan` | Read one tag snapshot |
+| `writeNdef` | Replace and verify a complete NDEF message |
+| `initializeNdef` | Preserve matching content or write and verify the initial message |
+| `cancelScan` | Request cancellation of the current scan |
+| `cancelWrite` | Request cancellation of a write or initialization |
+| `isScanning` | Query native read activity |
+| `isWriting` | Query native write activity |
+| `waitForIdle` | Wait for this bridge instance to become idle, with a deadline |
+
 ## Read a tag
 
 Call operations from user actions while the application is in the foreground.
 Each scan completes with one result; it is not a continuous subscription.
+The examples below are helper functions in a TypeScript module, not a complete
+screen. The screen handles their results and rejected Promises, and owns button
+state and [cancellation when it loses focus](#cancellation-and-session-state).
 
 ```ts
 import * as sfiora from '@sandrox/sfiora';
@@ -108,9 +136,15 @@ export async function readTag() {
 
 The result includes `id`, `technologies`, `ndef`, and `warnings`. Decoded NDEF
 values are in `tag.ndef?.records`: use `text`, `uri`, or `payloadBase64` as
-appropriate. Check `ndef.status` and `ndef.readError` as well: discovering a tag
-does not guarantee that its NDEF data was readable. Missing metadata must not
-be treated as an empty business value.
+appropriate. When `ndef` is present, check its `status` and `readError` as well:
+discovering a tag does not guarantee that its NDEF data was readable. Missing
+metadata must not be treated as an empty business value.
+
+When no identifier is available, `id` is still present with empty `hex` and
+`base64` strings and `length: 0`.
+
+Android reads and initialization use live NDEF data. When the current message
+is empty, Sfiora does not substitute data cached when the tag was discovered.
 
 `automatic` reads NDEF when available; `discover` returns tag information
 without requesting NDEF. `ndef` requires NDEF and uses iOS's compatibility
@@ -119,8 +153,7 @@ and optional details can differ between Android and iOS.
 
 ## Replace an NDEF message
 
-The remaining examples use the same `sfiora` import. Invoke each function from
-its own user action, and handle its rejected Promise at the call site.
+The remaining examples use the same `sfiora` import.
 
 ```ts
 export async function replaceTag() {
@@ -230,13 +263,15 @@ harmless.
 Allow only one read/write action at a time, including across screens. Disable
 both action buttons while a call is pending **or** either native state is true.
 iOS can deliver a successful result while its system panel is still closing;
-wait for actual idle before enabling the next action:
+wait for actual idle before enabling the next action. The following fragment
+shows the wait; connect success and failure to your screen's button and error
+state:
 
 ```ts
 try {
   await sfiora.waitForIdle({ timeoutMilliseconds: 5000 });
 } catch (error) {
-  // Display the error and keep the native-state gate; a refresh can try again.
+  // Display the error; keep actions disabled until a state refresh confirms idle.
 }
 ```
 
@@ -245,8 +280,7 @@ cancels a request or reserves the next session. `timeoutMilliseconds` is an
 integer from 1 to 60000 (default 5000). `SESSION_CLOSE_TIMEOUT` also covers a
 state query that never answers. Query errors propagate; they are not idle.
 If native closing takes over five seconds, a pending result can arrive while
-its session is still busy. Android initialization and reads use live NDEF data,
-including a legitimately empty message, without discovery-cache fallback.
+its session is still busy.
 Do not rely on a fixed delay or just the operation's `finally` block. If a state
 query fails, display the error rather than assuming the session is idle.
 
@@ -256,25 +290,39 @@ leave the native Activity active, so app lifecycle cleanup alone does not
 replace screen cleanup. Keep the app foregrounded and the tag still until the
 operation finishes.
 
-## Options and errors
+## Options
 
-| Scan option | Default | Meaning |
+Common scan options:
+
+| Option | Default | Meaning |
 | --- | --- | --- |
 | `mode` | `automatic` | `automatic`, `ndef`, or `discover` |
 | `timeoutMilliseconds` | `30000` | Integer from `1000` to `60000` |
-| `android.presentation` | `managed` | `none` disables the Android **scan** panel |
-| `android.deepReadEnabled` | `false` | Optional read-only protocol probes on supported tags |
-| `android.presenceCheckDelayMilliseconds` | `250` | Integer from `50` to `5000` |
-| `ios.pollingTechnologies` | `['iso14443', 'iso15693']` | Non-empty list; `iso18092` additionally needs FeliCa configuration |
 | `messages` | Built-in messages | Complete `NfcScanMessages` object for customized wording |
+
+Android scan settings go inside the `android` object:
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `presentation` | `managed` | `none` disables the scan panel |
+| `deepReadEnabled` | `false` | Optional read-only protocol probes on supported tags |
+| `presenceCheckDelayMilliseconds` | `250` | Integer from `50` to `5000` |
+
+For iOS, `ios.pollingTechnologies` defaults to `['iso14443', 'iso15693']`.
+It must be a non-empty list; adding `iso18092` also requires FeliCa configuration.
+It controls `automatic` and `discover` scans; `ndef` uses the system NDEF reader
+instead. Both platform option objects are validated on either OS, but only the
+current platform's settings affect scanning.
 
 Write options are `timeoutMilliseconds` with the same range/default and a
 complete `NfcWriteMessages` object. They do not accept scan-only options.
 Android bridge writes use the managed panel; iOS always uses the system NFC
-panel. Platform options apply on their named platform. Unknown fields and
+panel. Unknown scan/write fields and
 invalid values are rejected with `INVALID_OPTIONS`; custom `messages` objects
 must supply every required non-empty field. See the shipped
 [TypeScript declarations](index.d.ts) and `contract/types.ts` for field names.
+
+## Errors and troubleshooting
 
 `SfioraError` exposes `code`, `message`, `recoverable`, and optional
 `nativeError`. Branch on `code`; native messages may vary by device and OS.
@@ -284,7 +332,7 @@ must supply every required non-empty field. See the shipped
 | `NFC_UNSUPPORTED`, `NFC_DISABLED` | Check device support or ask the user to enable NFC |
 | `SCAN_BUSY`, `WRITE_BUSY` | Let the current session finish; do not enqueue automatic retries |
 | `USER_CANCELLED` | End the local interaction normally |
-| `SESSION_CLOSE_TIMEOUT` | Keep the native-state gate and allow a state refresh; do not assume the session closed |
+| `SESSION_CLOSE_TIMEOUT` | Keep actions disabled until a state refresh confirms the session has closed |
 | `SCAN_TIMEOUT`, `WRITE_TIMEOUT`, `TAG_LOST` | Ask the user to retry with stable tag contact |
 | `UNSUPPORTED_TAG`, `TAG_READ_ONLY`, `NDEF_CAPACITY_EXCEEDED` | Use a suitable formatted, writable tag or smaller message |
 | `READ_FAILED` | Inspect the read error; do not interpret it as an empty tag |
@@ -295,22 +343,21 @@ must supply every required non-empty field. See the shipped
 `recoverable` is a retry hint, not a guarantee that a write left the tag unchanged.
 The same write-state uncertainty applies to timeout, cancellation, and tag loss.
 
-## Compatibility, privacy, and support
+For linking errors, rebuild the native app after installation. For iOS session
+errors, check the usage description, signed entitlement, and signing profile.
 
-The package requires Node.js 18+ and React Native 0.76+. The native Sfiora cores
-target Android API 21 and iOS 13; the host must also meet its React Native and
-Expo requirements. For example, [React Native 0.76 requires Android API 24 and iOS 15.1](https://reactnative.dev/blog/2024/10/23/release-0.76-new-architecture#updates-to-minimum-ios-and-android-sdk-requirements).
-Do not lower the host's deployment target to the core minimum.
+## Privacy and support
 
 Sfiora does not format tags, change passwords, permanently lock tags, clone
 access cards, emulate cards, or expose arbitrary APDU/private-block writes.
 Tag technologies and read-only details do not imply support for all operations
-on that technology. It does not upload tag contents, include analytics, or
-interpret application-specific payloads. The host controls storage and use of
-returned data.
+on that technology.
 
-For linking errors, rebuild the native app after installation. For iOS session
-errors, check the usage description, signed entitlement, and signing profile.
+Tag data is read and processed on the device, and writes use the caller's
+contents. Sfiora does not upload tag contents to the author's servers, include
+analytics or advertising SDKs, or persist tag contents on the host device.
+The host controls application-specific validation, storage, and use of returned data.
+
 When reporting a problem, include the package version, OS/device, operation,
 error code, and relevant native error, omitting private tag contents.
 

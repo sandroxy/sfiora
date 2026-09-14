@@ -7,8 +7,9 @@ Pod::Spec.new do |spec|
   spec.version = package.fetch("version")
   spec.summary = package.fetch("description")
   spec.description = <<-DESC
-    Sfiora exposes contract-first NFC reading and verified NDEF writing through
-    the same native cores on legacy and new-architecture React Native apps.
+    Sfiora provides NFC tag reading, verified NDEF writing, and marker-based
+    initialization for React Native on Android and iOS. The package includes
+    the native runtimes and supports both React Native architectures.
   DESC
   spec.homepage = package.fetch("homepage")
   spec.license = { :type => "Apache-2.0", :file => "LICENSE" }

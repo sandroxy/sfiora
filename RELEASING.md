@@ -1,12 +1,20 @@
 # Releasing Sfiora
 
-Sfiora separates a product version from the identity of one concrete build.
-`plugin.json` declares the next product version. A version is not stable until
-its exact public files are locked by the consumer repository after publication.
+`plugin.json` declares the product version being prepared. A release candidate
+identifies one concrete set of files for that version. After publication, the
+consumer repository records the public files as its stable dependencies.
 
 Use the browser for GitHub Release uploads, manual workflow runs, and Central
 Portal publication. HBuilderX publishes the accepted UTS module. Local `gh`
 installation and a Central API token are not required for these routes.
+
+## Workflow
+
+1. Check the [development environment](DEVELOPMENT.md#environment) and finalize [package documentation](#documentation).
+2. [Build and record](#build-and-snapshot) one candidate with its exact artifact hashes.
+3. Complete [consumer acceptance](#consumer-acceptance) against those files.
+4. [Tag the accepted source](#tag-and-publish), then publish to [GitHub](#github-release), [Maven Central](#android--maven-central), [npm](#react-native--npm), and [DCloud](#uniapp--dcloud).
+5. [Record the public files](#public-verification) as the stable consumer dependencies.
 
 ## Release states
 
@@ -34,9 +42,9 @@ id and invalidate previous acceptance results.
 The root Chinese and English READMEs introduce the product and link to consumer
 guides. Keep their platform coverage, distribution links, and behavior
 descriptions aligned. Native and adapter READMEs describe complete integration,
-request/result semantics,
-lifecycle handling, and platform limits. Public documentation must follow the
-shipped APIs and must not depend on a business host or an internal test page.
+request/result semantics, lifecycle handling, and platform limits. Public
+documentation must follow the shipped APIs and must not depend on a business
+host or an internal test page.
 
 Keep product-version literals in `plugin.json`, package manifests, changelogs,
 and release records; use `<version>` in stable installation examples. Framework
@@ -138,8 +146,7 @@ as above. Native reuse does not carry forward acceptance results.
 [`release-policy.json`](release-policy.json) is Sfiora's machine-readable
 release contract. Candidate creation and the publication gate require an exact
 match for the product id, source repository, qualification fields, artifact
-roles, and automated/manual acceptance matrix. It contains no sibling-product
-catalog; every plugin owns its own independent policy.
+roles, and automated/manual acceptance matrix.
 
 For pipeline work only, `--allow-dirty` and `--allow-unsigned` produce a
 `rehearsal`. The state is derived from the actual source and signing evidence;
@@ -160,8 +167,8 @@ issues before deciding to release.
 
 ## Tag and publish
 
-After acceptance, create one annotated tag on the candidate's recorded source
-commit. Do not rebuild after tagging.
+After acceptance, confirm that HEAD matches the candidate's recorded source
+commit, then create one annotated tag on it. Do not rebuild after tagging.
 
 ```sh
 git tag -a "<version>" -m "Sfiora <version>"
@@ -287,6 +294,8 @@ Marketplace installation.
 All three workflows are explicitly manual. Publishing a GitHub Release does
 not automatically publish to another channel. Workflow-only corrections can
 run from the updated default branch while keeping the release tag unchanged.
+
+## Public verification
 
 After every public channel is available, update the Sfiora entry in
 `integrated-plugins/verification/stable-lock.json` with the public URLs, byte

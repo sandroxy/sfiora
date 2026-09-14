@@ -4,9 +4,13 @@ Foreground NFC discovery, NDEF reads, verified writes, and marker-based
 initialization. Requires Android API 21 or newer and a physical NFC-capable
 device. The host must also satisfy its framework requirements.
 
+Use the [headless client](#headless-read-write-and-initialization) when the app
+owns the NFC interface, or [managed panels](#managed-panels) for the built-in
+scan, write, and initialization UI. Both return the same typed results.
+
 ## Installation
 
-Enable Maven Central and add the core and optional UI dependency:
+Enable Maven Central in `settings.gradle.kts`:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -17,6 +21,8 @@ dependencyResolutionManagement {
 }
 ```
 
+Add the core and optional UI dependency in the app module's `build.gradle.kts`:
+
 ```kotlin
 dependencies {
     implementation("io.github.sandroxy:sfiora:<version>")
@@ -24,7 +30,10 @@ dependencies {
 }
 ```
 
-`sfiora` provides headless operations. `sfiora-ui` provides managed panels and
+Replace `<version>` with the version selected from
+[Maven Central](https://central.sonatype.com/artifact/io.github.sandroxy/sfiora).
+Keep both dependencies at the same version. `sfiora` provides headless operations.
+`sfiora-ui` provides managed panels and
 depends on the matching core. RN and UNI packages already include the required
 runtimes, so their hosts do not need to add the core separately.
 
@@ -227,7 +236,7 @@ that message object; omitting the object uses built-in Android resources.
 Constructor fields are documented in
 [NfcPresentationMessages.java](sfiora-ui/src/main/java/com/sandrox/sfiora/ui/NfcPresentationMessages.java).
 
-## Configuration
+## Configuration and messages
 
 Read options belong to `NfcReadConfiguration.builder()`; call `build()` after
 setting them. Write options belong to `NfcWriteConfiguration.builder()`.
@@ -346,8 +355,7 @@ Inspect `NfcError.getCode()` (or `getCode().getValue()` for its stable string),
 
 Writes have no rollback: timeout, cancellation, lost contact, or failed
 verification can leave changed, partial, or empty content. `recoverable` does
-not guarantee the previous contents survived. Start the operation before
-presenting a tag to avoid the idle Android tag dispatcher opening another app.
+not guarantee the previous contents survived.
 
 Sfiora does not upload tag contents, format or permanently lock tags, change
 passwords, clone access cards, emulate cards, or expose arbitrary APDU writes.

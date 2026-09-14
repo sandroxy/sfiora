@@ -4,20 +4,25 @@ This guide is for Sfiora maintainers and contributors. Developers installing
 published packages should start with [README.md](README.md),
 [README-EN.md](README-EN.md), or the native and adapter guides linked there.
 
-## Environment and repository layout
+## Environment
 
-Use the existing tool installations on your machine. Source checks need Git,
-Node.js (CI uses Node 24), Ruby with its standard library, Python 3, and Bash.
-Android compilation needs JDK 17, Android SDK Platform 36, and the checked-in
-Gradle wrapper. Set `JAVA_HOME` and `ANDROID_HOME`, or use an ignored
-`native/android/local.properties` for the SDK path. The library's Java target is
-11; this is separate from the JDK used to run Gradle.
+The required tools depend on the checks you run:
 
-Apple builds require macOS, Xcode with the iOS SDK, and a toolchain providing
-`xcrun swift-format`. Production callback tests additionally need an installed
-iOS Simulator runtime and the Ruby `xcodeproj` gem (or an existing `xcodeproj`
-executable). Physical NFC acceptance requires real devices and suitable tags;
+| Task | Tools |
+| --- | --- |
+| Source and documentation checks | Git, Node.js (CI uses Node 24), Ruby standard library, Python 3, Bash |
+| Android compilation and tests | JDK 17, Android SDK Platform 36, checked-in Gradle wrapper |
+| Apple compilation and portable tests | macOS, Xcode with the iOS SDK and `xcrun swift-format` |
+| Production iOS callback tests | An installed iOS Simulator runtime and the Ruby `xcodeproj` gem or executable |
+
+For Android, set `JAVA_HOME` and `ANDROID_HOME`, or use an ignored
+`native/android/local.properties` for the SDK path. The library's Java target
+is 11; this is separate from the JDK used to run Gradle.
+
+Physical NFC acceptance requires real devices and suitable tags;
 signed iOS hosts also need the NFC capability and matching provisioning profile.
+
+## Repository layout
 
 | Location | Maintained content |
 | --- | --- |

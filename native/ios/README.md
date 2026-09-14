@@ -130,14 +130,7 @@ to decide whether the next action is available. `stop()` silently terminates an
 operation when leaving the screen; use `cancelRead()` / `cancelWrite()` for user
 cancellation.
 
-The default read configuration is `.automatic`, 30 seconds, polling ISO 14443
-and ISO 15693. `.ndef` uses the system NDEF compatibility reader and may omit the
-tag identifier. `.discover` does not query NDEF. FeliCa requires opting into
-`.iso18092` and providing the applicable system codes; ISO 7816 AIDs are likewise
-configured by the host for its supported tags. These discovery settings do not
-add arbitrary protocol writes.
-
-## Configuration and wording
+## Configuration and messages
 
 Use `NfcReadConfiguration` or `NfcWriteConfiguration`. Their initializers throw
 on invalid timeout or empty wording; `.standard` provides validated defaults.
@@ -149,9 +142,15 @@ write and initialization also accept a `configuration:` argument.
 | `mode` | `.automatic` | Read NDEF when available; `.ndef` requires it, `.discover` skips it |
 | `timeoutMilliseconds` | `30000` | Integer from `1000` to `60000`; also available for writes |
 | `pollingTechnologies` | `[.iso14443, .iso15693]` | Non-empty set; `.iso18092` additionally needs FeliCa configuration |
-| `alertMessage`, `successMessage`, `multipleTagsMessage` | Built-in English text | Non-empty system-panel text; also available for writes |
+| `presentationMessages` | `.standard` | Non-empty system-panel text; also available for writes |
 
-For example, use these settings inside `readTag()`:
+`pollingTechnologies` controls `.automatic` and `.discover` reads. The `.ndef`
+mode uses the system NDEF compatibility reader instead, so this setting does
+not control its polling.
+
+The convenience initializer accepts `alertMessage`, `successMessage`, and
+`multipleTagsMessage` individually. For example, use these settings inside
+`readTag()`:
 
 ```swift
 let configuration = try NfcReadConfiguration(
@@ -180,9 +179,10 @@ they do not add arbitrary protocol commands or Android's deep-read probes.
 
 Inspect `tag.ndefStatus` and `tag.ndefReadError` before treating
 `tag.ndefMessage` as application data. A discovered tag can have unreadable or
-unsupported NDEF. `tag.identifier` can be absent; `.ndef` compatibility reads
-can lack an identifier even when NDEF was read successfully. Technology names
-and optional metadata differ across devices and platforms.
+unsupported NDEF. `tag.identifier` can be absent; `.ndef` uses the system NDEF
+compatibility reader and can lack an identifier even when NDEF was read
+successfully. Technology names and optional metadata differ across devices
+and platforms.
 
 This helper can be added to the view controller:
 

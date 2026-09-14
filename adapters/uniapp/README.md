@@ -2,17 +2,17 @@
 
 Sfiora 为经典 uni-app 和 uni-app x 的 Android/iOS App 提供 NFC 标签读取、NDEF 消息写入与回读验证，以及按标记保留或初始化。读写内容由应用决定，可使用文本、URI、MIME 或 NFC Forum External Type 记录。
 
-## 兼容范围与版本选择
+## 兼容范围
 
 | 接入方式 | 页面与运行环境 | 最低系统 |
 | --- | --- | --- |
-| 经典 uni-app legacy | Vue 2 / Vue 3 的 App Vue 页面，原生插件 | Android API 21 / iOS 13 |
 | 经典 uni-app UTS | Vue 2 / Vue 3 的 App Vue 页面，uni_modules | Android API 21 / iOS 13 |
 | uni-app x | Vapor，uni_modules | Android API 23 / iOS 15 |
+| 经典 uni-app legacy | Vue 2 / Vue 3 的 App Vue 页面，原生插件 | Android API 21 / iOS 13 |
 
 使用 HBuilderX 5.24 或更新版本，并满足所用 HBuilderX、宿主框架和打包工具的系统要求。UTS 市场兼容表对 classic/x 使用共同最低声明 Android API 23 / iOS 15；经典 uni-app 的插件原生配置最低为 API 21 / iOS 13。
 
-NFC 操作需要支持 NFC 的真机。本文的 uni-app x 示例面向 Vapor；Android VDOM 的直接 UTS 入口见下方单独说明。不支持 H5、小程序、nvue 或 HarmonyOS，也不能仅靠标准基座或热更新添加原生 NFC 能力。
+NFC 操作需要支持 NFC 的真机。本文的 uni-app x 接入说明面向 Vapor。不支持 H5、小程序、nvue 或 HarmonyOS，也不能仅靠标准基座或热更新添加原生 NFC 能力。
 
 各渠道已上架的版本以渠道页面为准；离线包和版本历史见 [GitHub Releases](https://github.com/sandroxy/sfiora/releases)。同一个 App 只安装一种 Sfiora 插件形态。
 
@@ -32,13 +32,13 @@ import * as sfiora from '@/uni_modules/Sandrox-Sfiora/js_sdk/index.js';
 
 它提供 Promise 返回值和带字符串错误码的 `SfioraError`。经典 uni-app 和 x Vapor 使用此入口即可，无须自行处理原生回调或 JSON。
 
-Android VDOM 使用直接 UTS 导入：
+需要在 UTS 代码中直接调用原生接口时，也可使用模块根入口：
 
 ```uts
 import * as sfiora from '@/uni_modules/Sandrox-Sfiora'
 ```
 
-直接 UTS 方法返回 `Promise<UTSJSONObject>` 等 UTS 类型；错误对象保留 `code`、`message`、`recoverable`、`nativeError`。这是独立的接入路径，不能把本文的 Vapor JavaScript 导入方式照搬到 VDOM，也不据此推定 iOS VDOM 兼容性。
+直接 UTS 方法返回 `Promise<UTSJSONObject>`、`Promise<boolean>` 或 `Promise<void>`；拒绝值保留 `code`、`message`、`recoverable`、`nativeError`，应按字段处理，不依赖 `instanceof Error`。直接 UTS 导入不改变上表的宿主兼容范围，下文的 uni-app x 页面示例仍使用 Vapor。
 
 ### Legacy：经典 uni-app 原生插件
 
@@ -52,7 +52,11 @@ import * as sfiora from '@/nativeplugins/Sandrox-Sfiora/js_sdk/index.js';
 
 ## 权限、签名与自定义基座
 
+### Android
+
 Android 插件声明 `android.permission.NFC`，并将 NFC 硬件声明为可选，因此无 NFC 的设备也可以安装应用。NFC 没有运行时权限弹框；使用前通过 `getCapabilities()` 检查设备支持和系统 NFC 开关。
+
+### iOS
 
 iOS 应用需要 NFC 用途说明、`TAG` entitlement，以及包含 **Near Field Communication Tag Reading** 能力的 App ID 和签名描述文件。用途说明应描述实际应用用途。
 
@@ -107,13 +111,31 @@ uni-app x 在项目根目录的 `Info.plist` 中添加用途说明：
 
 已有这两个文件时合并键值，不要覆盖其他插件的配置。原生资源目录规则见 [DCloud iOS 原生配置](https://doc.dcloud.net.cn/uni-app-x/collocation/app-nativeresource-ios.html)。使用 FeliCa 轮询时，还需在 `Info.plist` 的 `com.apple.developer.nfc.readersession.felica.systemcodes` 中填写应用支持的真实系统码；ISO 7816 AID 配置也由宿主按目标标签提供。
 
+### 构建与运行
+
 安装插件、修改原生权限或升级插件后，制作包含当前插件的自定义基座，或重新打包完整 App，再选择该基座运行到真机。基座需要匹配 HBuilderX、平台和插件版本。只修改页面布局或调用参数时，可以在同一匹配基座上重新运行页面；原生模块、权限和签名变化需要重新打包。
+
+## 接口一览
+
+所有方法均返回 Promise。参数、结果和错误的完整类型见包内 `js_sdk/index.d.ts`；直接 UTS 入口使用对应的 UTS 类型。下文分别给出各操作的调用示例。
+
+| 方法 | 用途 |
+| --- | --- |
+| `getCapabilities` | 查询设备 NFC 支持和启用状态 |
+| `startScan` | 读取一次标签快照 |
+| `writeNdef` | 替换并验证完整 NDEF 消息 |
+| `initializeNdef` | 保留匹配内容，或写入并验证初始化消息 |
+| `cancelScan` | 请求取消当前读取 |
+| `cancelWrite` | 请求取消当前写入或初始化 |
+| `isScanning` | 查询原生读取是否仍在进行 |
+| `isWriting` | 查询原生写入是否仍在进行 |
+| `waitForIdle` | 在期限内等待本桥接实例空闲 |
 
 ## 开始读取
 
 先由用户启动操作，再靠近标签；读写期间保持应用前台并稳定贴住标签。每次 `startScan` 只完成一次读取，不是持续事件订阅。
 
-经典 uni-app 可在页面的方法中调用：
+下面经典 uni-app 示例是业务 JS 模块中的辅助函数，由页面的点击事件调用。页面负责展示结果、处理 Promise 失败，并按[生命周期说明](#取消页面生命周期与按钮状态)管理按钮和取消操作：
 
 ```js
 import * as sfiora from '@/uni_modules/Sandrox-Sfiora/js_sdk/index.js';
@@ -158,9 +180,11 @@ async function readTag(): Promise<UTSJSONObject> {
 | `ndef` | 要求 NDEF；iOS 使用系统 NDEF 兼容读取会话，结果可能没有标签 ID |
 | `discover` | 只获取标签信息，不主动读取 NDEF |
 
-结果包含 `id`、`technologies`、`ndef` 和 `warnings`。读取文本用 `tag.ndef.records` 中的 `text`，URI 用 `uri`，二进制内容用 `payloadBase64`。经典 uni-app 可用可选链访问；UTS 使用 `UTSJSONObject` 的访问方法或明确的类型转换。
+结果包含 `id`、`technologies`、`warnings` 和可选的 `ndef`。先检查 `tag.ndef` 是否存在，再从其 `records` 中读取文本 `text`、URI `uri` 或二进制内容 `payloadBase64`。经典 uni-app 可用可选链访问；UTS 使用 `UTSJSONObject` 的访问方法或明确的类型转换。
 
-发现标签成功并不代表 NDEF 读取成功，需检查 `ndef.status`、`ndef.readError` 和 `warnings`。无值或读取错误不能被当成业务上的“空标签”。两端可读的技术信息和 ID 可能不同，不能假设每种模式都会返回 ID。
+发现标签成功并不代表 NDEF 读取成功，需检查 `ndef.status`、`ndef.readError` 和 `warnings`。无值或读取错误不能被当成业务上的“空标签”。两端可读的技术信息和 ID 可能不同；没有标识时仍有 `id` 对象，但 `hex`、`base64` 为空字符串，`length` 为 0。
+
+Android 的读取和初始化判断均使用实时 NDEF 内容，当前空消息不回退到发现时缓存。
 
 ## 替换 NDEF 消息并验证
 
@@ -223,42 +247,39 @@ export async function initializeTag() {
 
 ## 取消、页面生命周期与按钮状态
 
-所有平台提供：
-
-| 方法 | 返回值 |
-| --- | --- |
-| `getCapabilities()` | 设备 NFC 支持、启用情况和能力 |
-| `startScan(options?)` | 单次标签快照 |
-| `writeNdef(message, options?)` | 已写入并验证的结果 |
-| `initializeNdef(message, marker, options?)` | `preserved` 或 `initialized` 结果 |
-| `cancelScan()` | `Promise<void>` |
-| `cancelWrite()` | `Promise<void>`，也取消初始化 |
-| `isScanning()` | `Promise<boolean>` |
-| `isWriting()` | `Promise<boolean>` |
-| `waitForIdle(options?)` | `Promise<void>`，有上限地等待本桥接实例空闲 |
-
 取消没有进行中的操作不会报错。取消方法完成只代表请求已送达，原始读写 Promise 的失败仍需处理，也不代表系统 NFC 面板已经收起。
 
 页面应同时禁用读取和写入入口，条件是“本地有未完成调用，或 `isScanning()` / `isWriting()` 任一为 true”。iOS 成功结果可能在系统面板收起前返回，因此不能在 `finally` 中直接恢复按钮；继续查询状态，确认两项都为 false 后再恢复。状态查询失败应显示错误，不按 idle 处理。
 
 `await sfiora.waitForIdle({ timeoutMilliseconds: 5000 })` 可统一完成等待，legacy 的 JS SDK、UTS JS SDK 和直接 UTS API 均支持。超时参数为 1–60000 的整数，默认 5000；查询失败原样返回错误，超时返回 `SESSION_CLOSE_TIMEOUT`，即使查询没有回调也会结束等待。它不取消当前操作、不预留下一次会话，也不会在超时后释放原生占用；用户可刷新真实状态后再试。
 
-原生关闭超过 5 秒时可先交付待处理结果，实际关闭前仍保持忙碌。Android 的读取和初始化判断均使用实时 NDEF 内容，当前空消息不回退到发现时缓存。
+原生关闭超过 5 秒时可先交付待处理结果，实际关闭前仍保持忙碌。
 
 拥有当前操作的页面在 `onHide` / `onUnload` 中取消操作，并忽略页面离开后的迟到结果。不要让没有发起操作的页面随意取消另一个页面的会话。原生读写在进程内互斥，重复启动会返回忙错误。
 
-## 参数与错误处理
+## 参数
 
-| 读取参数 | 默认值 | 说明 |
+读取的通用参数：
+
+| 参数 | 默认值 | 说明 |
 | --- | --- | --- |
+| `mode` | `automatic` | `automatic`、`ndef` 或 `discover`，行为见读取示例 |
 | `timeoutMilliseconds` | `30000` | `1000`–`60000` 的整数，单位毫秒 |
-| `android.presentation` | `managed` | `none` 关闭 Android 读取面板 |
-| `android.deepReadEnabled` | `false` | 对支持的标签启用额外只读协议探测 |
-| `android.presenceCheckDelayMilliseconds` | `250` | `50`–`5000` 的整数 |
-| `ios.pollingTechnologies` | `['iso14443', 'iso15693']` | 非空数组；添加 `iso18092` 需配置 FeliCa 系统码 |
 | `messages` | 内置提示语 | 自定义时提供完整的 `NfcScanMessages` |
 
-写入选项只有 `timeoutMilliseconds`（范围和默认值同上）及完整的 `NfcWriteMessages`，不接受读取专用选项。Android 桥接写入使用操作面板，iOS 使用系统 NFC 面板。未知参数、错误类型或不完整的自定义提示语会返回 `INVALID_OPTIONS`。完整字段见包内 `js_sdk/index.d.ts` 和 `contract/types.d.ts`。
+Android 读取设置放入 `android` 对象：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `presentation` | `managed` | `none` 关闭读取面板 |
+| `deepReadEnabled` | `false` | 对支持的标签启用额外只读协议探测 |
+| `presenceCheckDelayMilliseconds` | `250` | `50`–`5000` 的整数 |
+
+iOS 的 `ios.pollingTechnologies` 默认为 `['iso14443', 'iso15693']`，必须为非空数组；添加 `iso18092` 需配置 FeliCa 系统码。它控制 `automatic`、`discover` 的轮询，`ndef` 模式使用系统 NDEF 读取会话。Android、iOS 两组参数在两端都会校验，但只影响对应平台的读取行为。
+
+写入选项只有 `timeoutMilliseconds`（范围和默认值同上）及完整的 `NfcWriteMessages`，不接受读取专用选项。Android 桥接写入使用操作面板，iOS 使用系统 NFC 面板。读取或写入选项中的未知参数、错误类型或不完整的自定义提示语会返回 `INVALID_OPTIONS`。完整字段见包内 `js_sdk/index.d.ts` 和 `contract/types.d.ts`。
+
+## 错误处理
 
 错误包含 `code`、`message`、`recoverable` 和可选 `nativeError`。按字符串 `code` 分支，不依赖设备原生错误文案：
 
@@ -287,7 +308,7 @@ export async function initializeTag() {
 
 ## 隐私、能力边界与许可
 
-插件无广告、统计或推广 SDK，不向作者服务器上传标签内容，也不替应用持久化业务数据；写入到标签的数据和宿主后续保存的数据由调用方决定。
+插件在设备上读取、处理并返回标签数据，按调用方提供的内容写入标签。它无广告、统计或推广 SDK，不向作者服务器上传标签内容，也不在宿主设备持久化标签内容；业务校验和后续存储由调用方负责。
 
 Sfiora 不提供标签格式化、永久锁定、密码修改、门禁卡复制、卡模拟或任意 APDU/私有区写入。标记与读取出的 ID 不构成身份真实性证明。
 
