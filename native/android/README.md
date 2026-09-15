@@ -153,8 +153,96 @@ call `cancelRead()` or `cancelWrite()` and handle the cancellation result.
 
 `NfcReadConfiguration.builder()` defaults to `AUTOMATIC` and a 30-second timeout;
 `NDEF` and `DISCOVER` are also available. Read/write timeouts range from 1 to 60
-seconds. Start an operation before presenting a tag so the idle system tag
-dispatcher does not take over.
+seconds. Start an operation before presenting a tag, or use the optional
+foreground dispatcher below if tags may remain nearby between operations.
+
+## Optional foreground tag handling
+
+The optional dispatcher and panel observer require Sfiora 1.2.0 or newer.
+By default, Sfiora leaves idle tag dispatch to the system. A screen can opt in
+to foreground dispatch while it is visible.
+This prevents a nearby tag from opening another tag-handling Activity between
+operations. The dispatcher ignores idle tags; scans and writes remain explicit
+calls to `NfcClient` or the UI controllers.
+
+`NfcForegroundDispatchController` belongs to the core library and requires no UI
+dependency. A host owns the controller and forwards Activity lifecycle events
+on the main thread. This example only shows dispatch ownership; merge its
+lifecycle calls with your existing read/write cleanup when adding it to an NFC screen.
+
+```java
+import android.app.Activity;
+import android.os.Bundle;
+import android.util.Log;
+import com.sandrox.sfiora.NfcForegroundDispatchController;
+import java.util.Map;
+
+public final class ForegroundNfcActivity extends Activity {
+    private NfcForegroundDispatchController foreground;
+
+    @Override protected void onCreate(Bundle state) {
+        super.onCreate(state);
+        foreground = new NfcForegroundDispatchController(this);
+        foreground.acquire("nfc-screen");
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        foreground.onResume(this);
+        Map<String, Object> state = foreground.getState();
+        Log.d("NFC", "Foreground dispatch: " + state.get("state"));
+        if (state.get("error") != null) Log.w("NFC", state.get("error").toString());
+    }
+
+    @Override protected void onPause() {
+        foreground.onPause();
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        foreground.close();
+        super.onDestroy();
+    }
+}
+```
+
+The example uses one owner for a controller owned by one Activity. If several
+screens share a controller, give each screen lifetime a unique owner ID and
+release that ID when it leaves. Acquisition is idempotent. Releasing one ID
+leaves other owners intact; releasing an unknown ID is harmless. IDs are 1–128
+ASCII characters, start with a letter or digit,
+and may otherwise contain letters, digits, `.`, `_`, `:`, or `-`. A controller
+can hold at most 128 distinct IDs. Invalid arguments throw `IllegalArgumentException`.
+
+`acquire`, `release`, and `getState` return `{ platform, revision, state, error }`
+as a Map. A return value is not proof that dispatch is active: inspect `state`.
+
+| `state` | Meaning |
+| --- | --- |
+| `disabled` | This controller has no requests |
+| `active` | Dispatch is registered on the resumed Activity |
+| `paused` | Requests remain, but no usable resumed Activity is available |
+| `unavailable` | NFC hardware is unavailable |
+| `nfcDisabled` | System NFC is switched off |
+| `failed` | Registration or cleanup failed; inspect `error` |
+
+`error` is a diagnostic string or null. `revision` increases when state or error
+changes within this controller and resets with a new controller; it is not a
+process-wide revision or session ID. Query again when refreshing
+screen state, including after returning from NFC settings. Native NFC setting
+changes reconcile retained requests without another acquisition.
+
+Requests survive pause/resume; `close()` releases them all and is idempotent.
+After closing, acquire/release/query calls are invalid. Dispatch does not occupy
+the NFC read/write session or change background tag handling. Do not mix it with
+another foreground dispatcher. Controllers on the same Activity share one system
+registration; releasing one leaves the others intact. A request for a different
+Activity returns `failed` while that registration is held. Retry after the
+previous Activity pauses; the failed request does not replace its registration.
+
+The required ordering follows Android's
+[foreground-dispatch contract](https://developer.android.com/reference/android/nfc/NfcAdapter#enableForegroundDispatch(android.app.Activity,android.app.PendingIntent,android.content.IntentFilter[],java.lang.String[][])):
+enable only for a resumed Activity and disable before `onPause()` returns.
 
 ## Managed panels
 
@@ -235,6 +323,59 @@ or `.Write` immediately before the callback. Supply every non-empty string in
 that message object; omitting the object uses built-in Android resources.
 Constructor fields are documented in
 [NfcPresentationMessages.java](sfiora-ui/src/main/java/com/sandrox/sfiora/ui/NfcPresentationMessages.java).
+
+### Observe panel completion
+
+A terminal result and `onStateChanged(false)` do not mean the panel has closed.
+If the next interaction should follow the full panel animation, observe it with
+`NfcPresentationState` as well as the client's read/write state. All presentation
+methods run on the main thread.
+
+`NfcPresentationState.getState()` returns an immutable Map containing `platform`,
+`supported`, and `activePresentationIds`. The IDs cover all currently displayed
+Sfiora panels in the process, including success and dismissal animations.
+`waitForEnd` captures that set; an empty set completes immediately, and later
+panels never extend the wait. IDs are temporary; do not store them as business
+identifiers. A headless operation adds no panel. Calling a wait before starting
+an operation does not reserve a wait for its future panel.
+
+This helper uses only the public UI API. Call it from the original operation's
+success or failure callback, after preserving or displaying that result. The
+logging below reports only completion diagnostics; connect them to a separate
+status/error area in your own screen.
+
+```java
+import android.util.Log;
+import com.sandrox.sfiora.NfcError;
+import com.sandrox.sfiora.ui.NfcPresentationState;
+
+final class NfcPanelObserver {
+    static void afterOperation() {
+        NfcPresentationState.waitForEnd(10000, new NfcPresentationState.Completion() {
+            @Override public void onSuccess() {
+                Log.d("NFC", "Captured panels have closed");
+            }
+
+            @Override public void onFailure(NfcError error) {
+                Log.w("NFC", "Panel wait: " + error.getCode() + ": " + error.getMessage());
+            }
+        });
+    }
+}
+```
+
+The timeout argument is required and ranges from 1 to 60000 milliseconds.
+An invalid timeout or null completion throws `IllegalArgumentException`.
+An expired wait calls `onFailure` with `PRESENTATION_TIMEOUT`; it does not
+close a panel or cancel/release an NFC session. Keep the original result and
+refresh actual panel and client state after a timeout.
+
+Keep action buttons disabled until both the session and the captured panels
+have ended. Only update or navigate from a still-current screen and operation.
+Starting another operation on the same controller immediately dismisses the old
+panel, including a managed-to-headless read. `stopScan()`, `stopWrite()`, or
+controller `close()` also end presentation directly; use them for teardown,
+not to wait for the normal animation.
 
 ## Configuration and messages
 
@@ -347,6 +488,7 @@ Inspect `NfcError.getCode()` (or `getCode().getValue()` for its stable string),
 | `NFC_UNSUPPORTED`, `NFC_DISABLED` | Check hardware or ask the user to enable NFC |
 | `SCAN_BUSY`, `WRITE_BUSY` | Wait for the existing session; do not automatically replay a write |
 | `USER_CANCELLED` | Finish the current interaction normally |
+| `PRESENTATION_TIMEOUT` | Preserve the result; refresh panel and client state after a UI-panel wait expires |
 | `SCAN_TIMEOUT`, `WRITE_TIMEOUT`, `TAG_LOST` | Let the user retry with stable contact |
 | `UNSUPPORTED_TAG`, `TAG_READ_ONLY`, `NDEF_CAPACITY_EXCEEDED` | Use a suitable formatted tag or smaller message |
 | `READ_FAILED` | Do not interpret unreadable data as empty |

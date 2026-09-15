@@ -130,6 +130,10 @@ uni-app x 在项目根目录的 `Info.plist` 中添加用途说明：
 | `isScanning` | 查询原生读取是否仍在进行 |
 | `isWriting` | 查询原生写入是否仍在进行 |
 | `waitForIdle` | 在期限内等待本桥接实例空闲 |
+| `acquireForegroundDispatch` / `releaseForegroundDispatch` | 按 owner 申请／释放 Android 前台接管 |
+| `getForegroundDispatchState` | 查询前台接管的原生状态及诊断 |
+| `getPresentationState` | 查询插件当前显示的 Android 面板；iOS 标明不支持 |
+| `waitForPresentationEnd` | 在期限内等待已显示的 Android 面板结束；iOS 返回不支持 |
 
 ## 开始读取
 
@@ -257,6 +261,163 @@ export async function initializeTag() {
 
 拥有当前操作的页面在 `onHide` / `onUnload` 中取消操作，并忽略页面离开后的迟到结果。不要让没有发起操作的页面随意取消另一个页面的会话。原生读写在进程内互斥，重复启动会返回忙错误。
 
+## 可选的 Android 前台标签接管
+
+前台接管及面板结束等待要求插件为 1.2.0 或更新版本，JS/UTS 代码与基座中的原生模块必须匹配。
+
+默认不接管空闲标签。如果标签会一直贴在手机上，可在 NFC 页面显示期间开启前台接管，避免空闲标签打开其他标签处理页面。接管会忽略这些标签；读取、写入和初始化仍需主动调用原有方法。
+
+用 `acquireForegroundDispatch(ownerId)` 申请，用 `releaseForegroundDispatch(ownerId)` 释放。重复申请同一个 ID 只保留一份请求，释放一次即可；释放不存在的 ID 不影响其他持有者，不同页面应使用不同 ID。ID 长度为 1–128 个 ASCII 字符，首字符为字母或数字，其余可使用字母、数字、`.`、`_`、`:`、`-`；每个原生控制器最多保留 128 个不同 ID，非法 ID 返回 `INVALID_OPTIONS`。
+
+经典 uni-app 可将下面的生命周期和字段合入自己的 Vue 2 / Vue 3 页面。将 `foregroundState`、`foregroundError` 绑定到页面的状态与错误区域；读写结果使用独立字段。legacy 只需替换导入路径。
+
+```js
+import * as sfiora from '@/uni_modules/Sandrox-Sfiora/js_sdk/index.js';
+
+let ownerSequence = 0;
+
+export default {
+  data() {
+    return { foregroundOwner: null, foregroundState: null, foregroundError: null };
+  },
+  onShow() {
+    if (uni.getSystemInfoSync().platform !== 'android' || this.foregroundOwner !== null) return;
+    const ownerId = `nfc-page:${Date.now()}:${++ownerSequence}`;
+    this.foregroundOwner = ownerId;
+    this.foregroundError = null;
+    sfiora.acquireForegroundDispatch(ownerId).then(state => {
+      if (this.foregroundOwner === ownerId) this.foregroundState = state;
+      else return sfiora.releaseForegroundDispatch(ownerId);
+    }).catch(error => {
+      if (this.foregroundOwner === ownerId) this.foregroundError = error;
+      else console.error('NFC foreground cleanup failed', error);
+    });
+  },
+  onHide() { this.releaseForeground(); },
+  onUnload() { this.releaseForeground(); },
+  methods: {
+    releaseForeground() {
+      const ownerId = this.foregroundOwner;
+      this.foregroundOwner = null;
+      this.foregroundState = null;
+      if (ownerId !== null) {
+        sfiora.releaseForegroundDispatch(ownerId)
+          .catch(error => console.error('NFC foreground cleanup failed', error));
+      }
+    },
+  },
+};
+```
+
+退出时先释放；如果申请结果迟到，再用原 ID 释放一次。释放是幂等的，不会影响新一轮页面显示所用的 ID。`onHide` 与 `onUnload` 都可调用清理；拥有读写操作的页面还应按上一节取消自己的操作。
+
+uni-app x Vapor 可把同一处理封装在独立的 `nfc-foreground.uts` 模块中。计数器留在模块作用域，使不同页面实例共享它。示例使用直接 UTS 入口，查询结果按 `UTSJSONObject` 取字段：
+
+```uts
+import * as sfiora from '@/uni_modules/Sandrox-Sfiora'
+
+let ownerSequence = 0
+
+export function attachNfcForeground(
+  onState: (state: UTSJSONObject) => void,
+  onError: (error: any) => void,
+): () => void {
+  if (uni.getSystemInfoSync().platform != 'android') return () => {}
+  const ownerId = 'nfc-page:' + Date.now().toString() + ':' + (++ownerSequence).toString()
+  let active = true
+  const report = (error: any) => {
+    if (active) onError(error)
+    else console.error('NFC foreground cleanup failed', error)
+  }
+  sfiora.acquireForegroundDispatch(ownerId).then(async (state: UTSJSONObject) => {
+    if (active) onState(state)
+    else await sfiora.releaseForegroundDispatch(ownerId)
+  }).catch(report)
+  return () => {
+    active = false
+    sfiora.releaseForegroundDispatch(ownerId).catch(report)
+  }
+}
+```
+
+在页面的 `<script setup lang="uts">` 中接入下面的生命周期。示例用字符串保存接管诊断，实际页面可按 `state['state'] as string` 显示状态；它们与原始读写结果分开：
+
+```uts
+import { ref } from 'vue'
+import { onShow, onHide, onUnload } from '@dcloudio/uni-app'
+import { attachNfcForeground } from './nfc-foreground.uts'
+
+const foregroundJson = ref('')
+const foregroundError = ref('')
+let releaseForeground: (() => void) | null = null
+
+function leaveForeground() {
+  const release = releaseForeground
+  releaseForeground = null
+  if (release != null) release()
+}
+onShow(() => {
+  leaveForeground()
+  foregroundError.value = ''
+  releaseForeground = attachNfcForeground(
+    (state: UTSJSONObject) => { foregroundJson.value = JSON.stringify(state) },
+    (error: any) => { foregroundError.value = JSON.stringify(error) },
+  )
+})
+onHide(leaveForeground)
+onUnload(leaveForeground)
+```
+
+申请成功返回 `{ platform, revision, state, error }`，不代表 NFC 一定启用。`active` 表示已接管，`paused` 表示暂时没有前台 Activity，`nfcDisabled` 表示 NFC 开关关闭，`unavailable` 表示无 NFC 硬件，`disabled` 表示没有请求，`failed` 表示失败且 `error` 包含诊断。应用从后台或设置页返回时，可通过 `getForegroundDispatchState()` 刷新快照；快照不是持续监听，查询失败也应单独显示。
+
+Activity 暂停期间接管停用，请求保留，恢复前台或 NFC 开关变化后由插件重新处理。无需自行编写原生模块或接收器，也不要同时启用其他 NFC 前台分发实现。iOS 查询固定返回 `{ platform: 'ios', revision: 0, state: 'unavailable', error: null }`；申请和释放先校验 ID，再返回 `NFC_UNSUPPORTED`，所以上述示例只在 Android 申请。
+
+`error` 为诊断字符串或 `null`；`revision` 仅在同一原生控制器的状态或错误变化时递增，控制器重建后重新计数。多个控制器位于同一 Activity 时共享注册，释放一个不影响其他请求；不同 Activity 同时申请会返回 `failed`，不会替换已有注册，应等先前 Activity 暂停后重试。
+
+## 等待 Android 操作面板结束
+
+需要完整展示成功反馈后再跳转时，在原始操作返回后分别等待会话空闲和面板结束。`getPresentationState()` 返回 `{ platform, supported, activePresentationIds }`；Android 的集合包含进程内 Sfiora 当前实际显示的面板，包括成功反馈和关闭动画。
+
+`waitForPresentationEnd()` 在原生端开始执行时捕获这个集合，全部关闭后完成 Promise，没有返回值；空集合立即完成，后续新面板不延长等待。ID 只供临时识别，不应保存为业务标识；无面板读取不产生 ID，提前调用也不会等待未来才显示的面板。它只接受可选的 `timeoutMilliseconds`，范围为整数 1–60000，默认 5000 毫秒。非法参数返回 `INVALID_OPTIONS`，超时返回 `PRESENTATION_TIMEOUT`；超时不取消操作、不强制关闭面板、不释放 NFC 占用。
+
+iOS 查询返回 `supported: false`、`activePresentationIds: []`，等待在校验参数后返回 `NFC_UNSUPPORTED`。空数组不代表系统面板已经消失；iOS 仍按会话状态安排下一次操作。
+
+下面是经典 uni-app 的 JS 辅助函数。调用方通过两个回调分别保存读写结果与带方法名的错误，等待错误追加显示，不能覆盖原结果。返回值只表示等待是否成功，不表示读取成功；页面已离开或操作已被替换时，应忽略它的回调和返回值。
+
+```js
+// 沿用上面的 sfiora 导入；由页面点击事件调用。
+export async function readAndWaitForUi(onResult, onError) {
+  let ready = true;
+  const observe = async (step, task) => {
+    try {
+      await task;
+    } catch (error) {
+      ready = false;
+      onError(step, error);
+    }
+  };
+  try {
+    onResult(await sfiora.startScan());
+  } catch (error) {
+    onError('startScan', error);
+  } finally {
+    const waits = [observe('waitForIdle', sfiora.waitForIdle())];
+    if (uni.getSystemInfoSync().platform === 'android') {
+      waits.push(observe('waitForPresentationEnd',
+        sfiora.waitForPresentationEnd({ timeoutMilliseconds: 10000 })));
+    }
+    await Promise.all(waits);
+  }
+  return ready;
+}
+```
+
+在 UTS 中使用同样的执行顺序；将 `onResult` 声明为 `(tag: UTSJSONObject) => void`，`onError` 为 `(step: string, error: any) => void`，函数返回 `Promise<boolean>`。局部 `observe` 的签名为 `(step: string, task: Promise<void>): Promise<void>`，`waits` 为 `Promise<void>[]`。直接 UTS 与 JS SDK 都使用同一组等待方法，错误按字段处理。
+
+等待期间保持按钮禁用。仅当页面和操作仍然有效且返回 `true`，才结合设备可用状态恢复按钮；返回 `false` 时重新查询会话及面板，查询失败不能按空闲处理。写入、初始化和取消使用相同的结束观察流程；尤其不能把等待错误解释成写入失败并自动重写。
+
+如果希望保留完整动画，等待期间不要启动替换操作或用取消方法隐藏已完成的面板。同一控制器的新操作及宿主销毁可能直接关闭旧面板。
+
 ## 参数
 
 读取的通用参数：
@@ -289,6 +450,7 @@ iOS 的 `ios.pollingTechnologies` 默认为 `['iso14443', 'iso15693']`，必须�
 | `SCAN_BUSY` / `WRITE_BUSY` | 等当前会话释放，避免连续自动重试 |
 | `USER_CANCELLED` | 正常结束这次交互 |
 | `SESSION_CLOSE_TIMEOUT` | 保留原生状态门控，允许刷新，不能假定会话已关闭 |
+| `PRESENTATION_TIMEOUT` | 保留原操作结果，刷新面板及会话状态后再继续 |
 | `SCAN_TIMEOUT` / `WRITE_TIMEOUT` / `TAG_LOST` | 调整贴合位置后由用户重试 |
 | `UNSUPPORTED_TAG` / `TAG_READ_ONLY` / `NDEF_CAPACITY_EXCEEDED` | 更换合适的可写 NDEF 标签或缩小消息 |
 | `READ_FAILED` | 检查读取错误，不能按空标签继续处理 |
@@ -302,7 +464,7 @@ iOS 的 `ios.pollingTechnologies` 默认为 `['iso14443', 'iso15693']`，必须�
 
 - **提示模块不存在**：核对安装目录、legacy 原生插件勾选、导入路径，以及运行时选择的自定义基座。只更新 JS 不能补入缺失的原生模块。
 - **iOS 会话无法开始**：核对用途说明、最终签名中的 `TAG` entitlement、App ID 与描述文件；修改后重打基座或 App。
-- **手机打开了系统标签页面**：先启动 Sfiora 操作再贴标签。空闲时的系统 NFC 分发属于宿主和系统行为；应用若需要处理相关 Intent，应在宿主层处理。
+- **手机打开了系统标签页面**：先启动 Sfiora 操作再贴标签；若标签会一直贴在手机上，可在 Android 页面显示期间启用上面的前台标签接管。需要自行处理空闲标签内容时，由宿主选择自己的分发方案，勿与 Sfiora 接管同时注册。
 - **取消后按钮暂时不可点**：确认正在等待真实会话释放；按钮状态应与原生状态一致。
 - **读到技术信息却不能写**：能发现某种技术不等于能写该标签；写入只面向已支持 NDEF 的可写标签。
 

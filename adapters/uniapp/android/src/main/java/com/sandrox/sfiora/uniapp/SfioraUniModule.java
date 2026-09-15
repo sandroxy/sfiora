@@ -16,6 +16,31 @@ public final class SfioraUniModule extends UniModule {
     }
 
     @UniJSMethod(uiThread = true)
+    public void acquireForegroundDispatch(String ownerId, UniJSCallback callback) {
+        call("acquireForegroundDispatch", new Object[] {ownerId}, callback);
+    }
+
+    @UniJSMethod(uiThread = true)
+    public void releaseForegroundDispatch(String ownerId, UniJSCallback callback) {
+        call("releaseForegroundDispatch", new Object[] {ownerId}, callback);
+    }
+
+    @UniJSMethod(uiThread = true)
+    public void getForegroundDispatchState(UniJSCallback callback) {
+        call("getForegroundDispatchState", new Object[] {}, callback);
+    }
+
+    @UniJSMethod(uiThread = true)
+    public void getPresentationState(UniJSCallback callback) {
+        call("getPresentationState", new Object[] {}, callback);
+    }
+
+    @UniJSMethod(uiThread = true)
+    public void waitForPresentationEnd(Object options, UniJSCallback callback) {
+        call("waitForPresentationEnd", new Object[] {options}, callback);
+    }
+
+    @UniJSMethod(uiThread = true)
     public void startScan(Object options, UniJSCallback callback) {
         call("startScan", new Object[] {options}, callback);
     }
@@ -59,8 +84,14 @@ public final class SfioraUniModule extends UniModule {
     }
 
     @Override
+    public void onActivityResume() {
+        super.onActivityResume();
+        runtime.onResume(mUniSDKInstance == null ? null : mUniSDKInstance.getContext());
+    }
+
+    @Override
     public void onActivityPause() {
-        runtime.close();
+        runtime.onPause();
         super.onActivityPause();
     }
 

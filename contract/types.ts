@@ -134,6 +134,7 @@ export type NfcErrorCode =
   | 'WRITE_BUSY'
   | 'WRITE_TIMEOUT'
   | 'SESSION_CLOSE_TIMEOUT'
+  | 'PRESENTATION_TIMEOUT'
   | 'TAG_READ_ONLY'
   | 'NDEF_CAPACITY_EXCEEDED'
   | 'WRITE_FAILED'
@@ -294,3 +295,23 @@ export interface NfcNdefInitializedResult
 export type NfcNdefInitializationResult =
   | NfcNdefPreservedResult
   | NfcNdefInitializedResult;
+
+export interface NfcForegroundDispatchState {
+  platform: NfcPlatform;
+  /** Monotonic within one native controller; changes when state or error changes. */
+  revision: number;
+  state: 'disabled' | 'active' | 'paused' | 'unavailable' | 'nfcDisabled' | 'failed';
+  error: string | null;
+}
+
+export interface NfcPresentationState {
+  platform: NfcPlatform;
+  /** False on iOS; Core NFC presentation is controlled by the system. */
+  supported: boolean;
+  activePresentationIds: ReadonlyArray<string>;
+}
+
+export interface NfcWaitForPresentationEndOptions {
+  /** Integer 1–60000; default 5000 milliseconds. No other options are accepted. */
+  timeoutMilliseconds?: number;
+}

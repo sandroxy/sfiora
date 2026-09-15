@@ -6,6 +6,9 @@ export type {
   NfcAndroidScanOptions,
   NfcByteValue,
   NfcCapabilities,
+  NfcForegroundDispatchState,
+  NfcPresentationState,
+  NfcWaitForPresentationEndOptions,
   NfcErrorCode,
   NfcErrorPayload,
   NfcIosScanOptions,
@@ -40,6 +43,9 @@ export type {
 
 import type {
   NfcCapabilities,
+  NfcForegroundDispatchState,
+  NfcPresentationState,
+  NfcWaitForPresentationEndOptions,
   NfcErrorCode,
   NfcNativeError,
   NfcNdefExternalTypeMarker,
@@ -82,3 +88,17 @@ export interface NfcWaitForIdleOptions {
  * Rejects with SESSION_CLOSE_TIMEOUT on deadline; native busy state is unchanged.
  */
 export function waitForIdle(options?: NfcWaitForIdleOptions): Promise<void>;
+
+/** Opt-in Android foreground dispatch. Owner acquisition/release is idempotent and independent of RF sessions.
+ * Requests survive pause/resume and end when released or the native bridge is destroyed.
+ * Inspect the returned state; a fulfilled call does not mean NFC is enabled. iOS rejects NFC_UNSUPPORTED.
+ */
+export function acquireForegroundDispatch(ownerId: string): Promise<NfcForegroundDispatchState>;
+export function releaseForegroundDispatch(ownerId: string): Promise<NfcForegroundDispatchState>;
+export function getForegroundDispatchState(): Promise<NfcForegroundDispatchState>;
+export function getPresentationState(): Promise<NfcPresentationState>;
+/** Captures currently visible Sfiora Android panels. Later panels do not extend this wait.
+ * Call after an operation result. Does not cancel, reserve a session, or imply RF idle.
+ * Rejects PRESENTATION_TIMEOUT on deadline; iOS rejects NFC_UNSUPPORTED.
+ */
+export function waitForPresentationEnd(options?: NfcWaitForPresentationEndOptions): Promise<void>;

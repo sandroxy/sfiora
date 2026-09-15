@@ -81,6 +81,12 @@ cancellation request returns, wait for native resources to be released before
 enabling the next action. RN/UNI provide bounded `waitForIdle()` for this purpose.
 An idle-wait timeout does not mean the native session has closed.
 
+On Android, a screen can optionally take over idle tag dispatch to keep a nearby
+tag from opening another tag-handling screen. Reads and writes still start only
+when requested by the app. Applications can also wait for the operation panel
+to finish before navigating away. The [Android guide](native/android/README.md#optional-foreground-tag-handling)
+covers native integration; RN and UNI lifecycle examples are in their respective guides.
+
 Lifecycle handling, error codes, and troubleshooting are in the
 [Android guide](native/android/README.md), [iOS guide](native/ios/README.md),
 [RN guide](adapters/react-native/README.md), and [UNI guide](adapters/uniapp/README.md).

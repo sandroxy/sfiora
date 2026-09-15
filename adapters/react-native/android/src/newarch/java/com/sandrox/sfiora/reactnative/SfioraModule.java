@@ -71,6 +71,31 @@ public final class SfioraModule extends NativeSfioraSpec {
     }
 
     @Override
+    public void acquireForegroundDispatch(String ownerId, Promise promise) {
+        delegate.acquireForegroundDispatch(ownerId, promise);
+    }
+
+    @Override
+    public void releaseForegroundDispatch(String ownerId, Promise promise) {
+        delegate.releaseForegroundDispatch(ownerId, promise);
+    }
+
+    @Override
+    public void getForegroundDispatchState(Promise promise) {
+        delegate.getForegroundDispatchState(promise);
+    }
+
+    @Override
+    public void getPresentationState(Promise promise) {
+        delegate.getPresentationState(promise);
+    }
+
+    @Override
+    public void waitForPresentationEnd(ReadableMap options, Promise promise) {
+        delegate.waitForPresentationEnd(options, promise);
+    }
+
+    @Override
     public void invalidate() {
         delegate.invalidate();
         super.invalidate();

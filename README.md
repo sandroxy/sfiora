@@ -52,6 +52,8 @@ NFC 操作需要支持 NFC 的真机与合适标签。写入要求标签已支�
 
 同一时间只发起一次读写。成功、失败或取消返回后，仍需等待原生会话释放，再开放下一次操作；RN/UNI 提供 `waitForIdle()` 完成有上限的等待。等待超时不代表原生会话已释放。
 
+Android 还可按页面需要接管空闲时的标签分发，避免贴着标签时跳到其他标签处理页面；读写仍由应用主动发起。如果希望完整展示操作面板后再跳转页面，可以单独等待面板关闭。原生接入见 [Android 指南](native/android/README.md#optional-foreground-tag-handling)，RN 和 UNI 的生命周期示例见各自指南。
+
 生命周期处理、错误码和接入排查见 [Android 指南](native/android/README.md)、[iOS 指南](native/ios/README.md)、[RN 指南](adapters/react-native/README.md) 和 [UNI 指南](adapters/uniapp/README.md)。
 
 ## 维护与反馈

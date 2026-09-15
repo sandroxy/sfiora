@@ -1,8 +1,8 @@
 import {
   InvokeSfioraNative, SfioraNativeCallback, GetCapabilities, StartScan,
-  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting, WaitForIdle,
+  CancelScan, IsScanning, WriteNdef, InitializeNdef, CancelWrite, IsWriting, WaitForIdle, AcquireForegroundDispatch, ReleaseForegroundDispatch, GetForegroundDispatchState, GetPresentationState, WaitForPresentationEnd,
 } from '../interface.uts'
-import { invokeObject, invokeBoolean, invokeVoid, waitForNativeIdle } from '../bridge.uts'
+import { invokeObject, invokeOwner, invokeBoolean, invokeVoid, waitForNativeIdle } from '../bridge.uts'
 export { SfioraError } from '../bridge.uts'
 import { SfioraBridgeCoordinator } from 'SfioraUniRuntime'
 
@@ -39,4 +39,20 @@ export const isWriting: IsWriting = function(): Promise<boolean> {
 
 export const waitForIdle: WaitForIdle = function(options?: UTSJSONObject): Promise<void> {
   return waitForNativeIdle(invokeSfioraNative, options)
+}
+
+export const acquireForegroundDispatch: AcquireForegroundDispatch = function(ownerId: string): Promise<UTSJSONObject> {
+  return invokeOwner(invokeSfioraNative, 'acquireForegroundDispatch', ownerId)
+}
+export const releaseForegroundDispatch: ReleaseForegroundDispatch = function(ownerId: string): Promise<UTSJSONObject> {
+  return invokeOwner(invokeSfioraNative, 'releaseForegroundDispatch', ownerId)
+}
+export const getForegroundDispatchState: GetForegroundDispatchState = function(): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'getForegroundDispatchState', [])
+}
+export const getPresentationState: GetPresentationState = function(): Promise<UTSJSONObject> {
+  return invokeObject(invokeSfioraNative, 'getPresentationState', [])
+}
+export const waitForPresentationEnd: WaitForPresentationEnd = function(options?: UTSJSONObject): Promise<void> {
+  return invokeVoid(invokeSfioraNative, 'waitForPresentationEnd', [options ?? {}])
 }

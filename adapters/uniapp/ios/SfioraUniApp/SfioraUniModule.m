@@ -14,6 +14,41 @@ UNI_EXPORT_METHOD(@selector(getCapabilities:))
     }
 }
 
+UNI_EXPORT_METHOD(@selector(acquireForegroundDispatch:callback:))
+- (void)acquireForegroundDispatch:(id)ownerId callback:(UniModuleKeepAliveCallback)callback {
+    if (callback) {
+        callback([[SfioraBridgeCoordinator shared] invokeHostCapability:@"acquireForegroundDispatch" argument:ownerId], NO);
+    }
+}
+
+UNI_EXPORT_METHOD(@selector(releaseForegroundDispatch:callback:))
+- (void)releaseForegroundDispatch:(id)ownerId callback:(UniModuleKeepAliveCallback)callback {
+    if (callback) {
+        callback([[SfioraBridgeCoordinator shared] invokeHostCapability:@"releaseForegroundDispatch" argument:ownerId], NO);
+    }
+}
+
+UNI_EXPORT_METHOD(@selector(getForegroundDispatchState:))
+- (void)getForegroundDispatchState:(UniModuleKeepAliveCallback)callback {
+    if (callback) {
+        callback([[SfioraBridgeCoordinator shared] invokeHostCapability:@"getForegroundDispatchState" argument:nil], NO);
+    }
+}
+
+UNI_EXPORT_METHOD(@selector(getPresentationState:))
+- (void)getPresentationState:(UniModuleKeepAliveCallback)callback {
+    if (callback) {
+        callback([[SfioraBridgeCoordinator shared] invokeHostCapability:@"getPresentationState" argument:nil], NO);
+    }
+}
+
+UNI_EXPORT_METHOD(@selector(waitForPresentationEnd:callback:))
+- (void)waitForPresentationEnd:(id)options callback:(UniModuleKeepAliveCallback)callback {
+    if (callback) {
+        callback([[SfioraBridgeCoordinator shared] invokeHostCapability:@"waitForPresentationEnd" argument:options], NO);
+    }
+}
+
 UNI_EXPORT_METHOD(@selector(startScan:callback:))
 - (void)startScan:(id)options
          callback:(UniModuleKeepAliveCallback)callback {

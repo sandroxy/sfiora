@@ -24,6 +24,11 @@ import Foundation
             client.capabilities.dictionary as NSDictionary
         }
 
+        @objc(invokeHostCapability:argument:)
+        public func invokeHostCapability(_ method: String, argument: Any?) -> NSDictionary {
+            SfioraBridgeHostCapabilities.response(method: method, argument: argument)
+        }
+
         @objc(startScanWithOptions:success:failure:)
         public func startScan(
             options: NSDictionary?,
@@ -166,6 +171,9 @@ import Foundation
                             "getCapabilities": 0, "startScan": 1, "cancelScan": 0,
                             "isScanning": 0, "writeNdef": 2, "initializeNdef": 3,
                             "cancelWrite": 0, "isWriting": 0,
+                            "getForegroundDispatchState": 0, "acquireForegroundDispatch": 1,
+                            "releaseForegroundDispatch": 1, "getPresentationState": 0,
+                            "waitForPresentationEnd": 1,
                         ][method], args.count == count
                     else {
                         throw NfcError(
@@ -183,6 +191,12 @@ import Foundation
                         return value
                     }
                     switch method {
+                    case "getForegroundDispatchState", "acquireForegroundDispatch",
+                        "releaseForegroundDispatch", "getPresentationState",
+                        "waitForPresentationEnd":
+                        let response = self.invokeHostCapability(method, argument: args.first)
+                        let ok = response["ok"] as? Bool == true
+                        emit(ok, response[ok ? "data" : "error"]!)
                     case "getCapabilities": emit(true, self.getCapabilities())
                     case "isScanning": emit(true, self.isScanning())
                     case "isWriting": emit(true, self.isWriting())

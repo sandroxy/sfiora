@@ -10,3 +10,8 @@ export type InitializeNdef = (message: UTSJSONObject, marker: UTSJSONObject, opt
 export type CancelWrite = () => Promise<void>
 export type IsWriting = () => Promise<boolean>
 export type WaitForIdle = (options?: UTSJSONObject) => Promise<void>
+export type AcquireForegroundDispatch = (ownerId: string) => Promise<UTSJSONObject>
+export type ReleaseForegroundDispatch = (ownerId: string) => Promise<UTSJSONObject>
+export type GetForegroundDispatchState = () => Promise<UTSJSONObject>
+export type GetPresentationState = () => Promise<UTSJSONObject>
+export type WaitForPresentationEnd = (options?: UTSJSONObject) => Promise<void>

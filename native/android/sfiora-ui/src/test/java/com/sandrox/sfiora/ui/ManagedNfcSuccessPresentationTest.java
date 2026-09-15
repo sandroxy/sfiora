@@ -168,6 +168,36 @@ public class ManagedNfcSuccessPresentationTest {
         assertFalse(managedDialog.isShowing());
     }
 
+    @Test
+    public void publicPresentationWaitTracksActualDismissalAfterResult() {
+        createDialog();
+        AtomicInteger completed = new AtomicInteger();
+        managedDialog.showSuccess();
+        assertEquals(1, ((List<?>) NfcPresentationState.getState().get("activePresentationIds")).size());
+        NfcPresentationState.waitForEnd(2000, new NfcPresentationState.Completion() {
+            @Override public void onSuccess() { completed.incrementAndGet(); }
+            @Override public void onFailure(com.sandrox.sfiora.NfcError error) { throw new AssertionError(error); }
+        });
+        assertEquals(0, completed.get());
+        managedDialog.dismissWithoutCancellation();
+        assertEquals("Dismissal animation still owns the panel", 0, completed.get());
+        idleFor(400);
+        assertFalse(managedDialog.isShowing());
+        assertEquals(1, completed.get());
+        assertTrue(((List<?>) NfcPresentationState.getState().get("activePresentationIds")).isEmpty());
+    }
+
+    @Test
+    public void lifecycleTeardownEndsPresentationWithoutWaitingForAnotherAnimationFrame() {
+        createDialog();
+        managedDialog.showSuccess();
+        managedDialog.dismissWithoutCancellation();
+        managedDialog.dismissImmediatelyWithoutCancellation();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(managedDialog.isShowing());
+        assertTrue(((List<?>) NfcPresentationState.getState().get("activePresentationIds")).isEmpty());
+    }
+
     private NfcReaderScanAnimationView createView() {
         NfcReaderScanAnimationView view = new NfcReaderScanAnimationView(activity);
         FrameLayout root = new FrameLayout(activity);

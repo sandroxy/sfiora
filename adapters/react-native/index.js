@@ -77,6 +77,35 @@ async function invoke(method, ...args) {
   }
 }
 
+function acquireForegroundDispatch(ownerId) {
+  return invokeOwner('acquireForegroundDispatch', ownerId);
+}
+function releaseForegroundDispatch(ownerId) {
+  return invokeOwner('releaseForegroundDispatch', ownerId);
+}
+function invokeOwner(method, ownerId) {
+  if (typeof ownerId !== 'string' || ownerId.length > 128 || !/^[A-Za-z0-9]/.test(ownerId) || /[^A-Za-z0-9._:-]/.test(ownerId)) {
+    return Promise.reject(new SfioraError({ code: 'INVALID_OPTIONS', message: 'ownerId must be 1-128 ASCII letters, digits, dots, underscores, colons or hyphens, starting with a letter or digit', recoverable: true }));
+  }
+  return invoke(method, ownerId);
+}
+function getForegroundDispatchState() {
+  return invoke('getForegroundDispatchState');
+}
+function getPresentationState() {
+  return invoke('getPresentationState');
+}
+async function waitForPresentationEnd(options = {}) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)) {
+    throw new SfioraError({ code: 'INVALID_OPTIONS', message: 'waitForPresentationEnd options must be an object', recoverable: true });
+  }
+  const timeout = options.timeoutMilliseconds === undefined ? 5000 : options.timeoutMilliseconds;
+  if (Object.keys(options).some(key => key !== 'timeoutMilliseconds') || !Number.isInteger(timeout) || timeout < 1 || timeout > 60000) {
+    throw new SfioraError({ code: 'INVALID_OPTIONS', message: 'Only timeoutMilliseconds is supported; it must be an integer from 1 to 60000', recoverable: true });
+  }
+  await invoke('waitForPresentationEnd', { timeoutMilliseconds: timeout });
+}
+
 function getCapabilities() {
   return invoke('getCapabilities');
 }
@@ -208,6 +237,8 @@ function waitForIdle(options = {}) {
 }
 
 module.exports = {
+  acquireForegroundDispatch, releaseForegroundDispatch, getForegroundDispatchState,
+  getPresentationState, waitForPresentationEnd,
   SfioraError,
   waitForIdle,
   cancelScan,

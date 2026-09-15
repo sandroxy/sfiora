@@ -22,9 +22,8 @@ function invalidResponse(): SfioraError {
   })
 }
 
-function invoke(transport: InvokeSfioraNative, method: string, args: UTSJSONObject[]): Promise<UTSJSONObject> {
+function invoke(transport: InvokeSfioraNative, method: string, json: string | null): Promise<UTSJSONObject> {
   return new Promise<UTSJSONObject>((resolve, reject) => {
-    const json = JSON.stringify(args)
     if (json == null) {
       reject(new SfioraError({ code: 'INVALID_OPTIONS', message: 'NFC arguments must be JSON values', recoverable: true }))
       return
@@ -47,7 +46,15 @@ function invoke(transport: InvokeSfioraNative, method: string, args: UTSJSONObje
 }
 
 export function invokeObject(transport: InvokeSfioraNative, method: string, args: UTSJSONObject[]): Promise<UTSJSONObject> {
-  return invoke(transport, method, args).then((envelope: UTSJSONObject): Promise<UTSJSONObject> => {
+  return objectResult(invoke(transport, method, JSON.stringify(args)))
+}
+
+export function invokeOwner(transport: InvokeSfioraNative, method: string, ownerId: string): Promise<UTSJSONObject> {
+  return objectResult(invoke(transport, method, JSON.stringify([ownerId])))
+}
+
+function objectResult(result: Promise<UTSJSONObject>): Promise<UTSJSONObject> {
+  return result.then((envelope: UTSJSONObject): Promise<UTSJSONObject> => {
     return new Promise<UTSJSONObject>((resolve, reject) => {
       const data = envelope.getJSON('data')
       if (data == null) {
@@ -60,7 +67,7 @@ export function invokeObject(transport: InvokeSfioraNative, method: string, args
 }
 
 export function invokeBoolean(transport: InvokeSfioraNative, method: string): Promise<boolean> {
-  return invoke(transport, method, []).then((envelope: UTSJSONObject): Promise<boolean> => {
+  return invoke(transport, method, '[]').then((envelope: UTSJSONObject): Promise<boolean> => {
     return new Promise<boolean>((resolve, reject) => {
       const data = envelope.getBoolean('data')
       if (data == null) {
@@ -72,8 +79,8 @@ export function invokeBoolean(transport: InvokeSfioraNative, method: string): Pr
   })
 }
 
-export function invokeVoid(transport: InvokeSfioraNative, method: string): Promise<void> {
-  return invoke(transport, method, []).then((_envelope: UTSJSONObject): void => {})
+export function invokeVoid(transport: InvokeSfioraNative, method: string, args: UTSJSONObject[] = []): Promise<void> {
+  return invoke(transport, method, JSON.stringify(args)).then((_envelope: UTSJSONObject): void => {})
 }
 
 export function waitForNativeIdle(transport: InvokeSfioraNative, options?: UTSJSONObject): Promise<void> {

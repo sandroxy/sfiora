@@ -8,6 +8,8 @@ async function verifyInstalledPackage() {
     Object.keys(sfiora).sort(),
     [
       'SfioraError',
+      'acquireForegroundDispatch', 'releaseForegroundDispatch', 'getForegroundDispatchState',
+      'getPresentationState', 'waitForPresentationEnd',
       'cancelScan',
       'cancelWrite',
       'getCapabilities',
@@ -21,6 +23,11 @@ async function verifyInstalledPackage() {
   );
 
   await sfiora.waitForIdle();
+  assert.equal((await sfiora.getForegroundDispatchState()).state, 'disabled');
+  assert.equal((await sfiora.acquireForegroundDispatch('package-consumer')).state, 'active');
+  assert.equal((await sfiora.releaseForegroundDispatch('package-consumer')).state, 'disabled');
+  assert.equal((await sfiora.getPresentationState()).supported, true);
+  assert.equal(await sfiora.waitForPresentationEnd(), undefined);
   const reactNativeCapabilities = await sfiora.getCapabilities();
   assert.equal(reactNativeCapabilities.platform, 'android');
   const writeResult = await sfiora.writeNdef({

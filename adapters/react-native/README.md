@@ -103,6 +103,10 @@ Every method returns a Promise. Request fields and result types are defined in
 | `isScanning` | Query native read activity |
 | `isWriting` | Query native write activity |
 | `waitForIdle` | Wait for this bridge instance to become idle, with a deadline |
+| `acquireForegroundDispatch` / `releaseForegroundDispatch` | Request/release Android foreground tag handling for one owner |
+| `getForegroundDispatchState` | Query native foreground dispatch state and diagnostics |
+| `getPresentationState` | Query visible managed Android panels; iOS reports unsupported |
+| `waitForPresentationEnd` | Wait for captured Android panels to close; iOS rejects as unsupported |
 
 ## Read a tag
 
@@ -290,6 +294,156 @@ leave the native Activity active, so app lifecycle cleanup alone does not
 replace screen cleanup. Keep the app foregrounded and the tag still until the
 operation finishes.
 
+## Optional foreground tag handling
+
+Foreground-dispatch and panel-completion APIs require Sfiora 1.2.0 or newer in
+both the JS package and the rebuilt native app.
+
+By default, Sfiora leaves idle tag dispatch to the system. Enable this feature
+when a tag may stay near the phone while your NFC screen is idle.
+Android can otherwise open another tag-handling screen between your operations.
+Foreground dispatch receives and ignores these idle tags; it does not start a
+read, grant a read/write reservation, or affect background tag handling.
+
+Acquire a unique `ownerId` while the screen needs this behavior and release it
+when the screen loses focus. Repeated acquisition of one ID is idempotent;
+release removes only that owner's request. Releasing an unknown ID is harmless.
+IDs contain 1–128 ASCII letters, digits, `.`, `_`, `:`, or `-`, starting with a
+letter or digit. A native controller
+can hold up to 128 distinct owners. Invalid IDs reject with `INVALID_OPTIONS`.
+
+The following hook handles acquisition and cleanup for both RN architectures.
+Pass the screen's actual navigation focus, not just its mounted state. Keep
+`onState` and `onError` stable with `useCallback`; they display state and errors
+in your screen. Operation cancellation remains the screen's responsibility.
+
+```ts
+import { useEffect } from 'react';
+import { Platform } from 'react-native';
+import * as sfiora from '@sandrox/sfiora';
+
+let foregroundOwnerSequence = 0;
+
+export function useNfcForegroundDispatch(
+  isFocused: boolean,
+  onState: (state: sfiora.NfcForegroundDispatchState) => void,
+  onError: (error: unknown) => void,
+) {
+  useEffect(() => {
+    if (!isFocused || Platform.OS !== 'android') return;
+    const ownerId = `nfc-screen:${Date.now()}:${++foregroundOwnerSequence}`;
+    let active = true;
+    const report = (error: unknown) => {
+      if (active) onError(error);
+      else console.error('NFC foreground cleanup failed', error);
+    };
+
+    void sfiora.acquireForegroundDispatch(ownerId).then(async state => {
+      if (active) onState(state);
+      else await sfiora.releaseForegroundDispatch(ownerId);
+    }).catch(report);
+
+    return () => {
+      active = false;
+      void sfiora.releaseForegroundDispatch(ownerId).catch(report);
+    };
+  }, [isFocused, onState, onError]);
+}
+```
+
+The extra release after a late acquisition is intentional and harmless: it
+always uses that effect's captured ID. It cannot release the next screen's ID.
+App pause/resume and NFC setting changes are handled natively while requests
+are held; bridge destruction releases all of that bridge's requests.
+No additional Expo plugin, receiver, or native module is needed.
+
+A resolved acquisition returns `{ platform, revision, state, error }`, even
+when dispatch is not active. Inspect `state`: `active` means registered,
+`paused` means no resumed Activity, `nfcDisabled` means NFC is off, and
+`unavailable` means no NFC hardware. `disabled` means no requests remain;
+`failed` includes a native diagnostic in `error`. Query
+`getForegroundDispatchState()` again on app resume or return from settings;
+snapshots are not subscriptions. Query errors should be shown separately from
+read/write results. `error` is a string or null. `revision` increases when state
+or error changes within one native controller and resets with a new controller.
+
+Controllers on the same Activity share a system registration. Releasing one
+leaves the others intact. A request for another Activity returns `failed` while
+the registration is held; retry after the previous Activity pauses. Do not
+simultaneously register another NFC dispatcher.
+
+iOS queries return `{ platform: 'ios', revision: 0, state: 'unavailable', error: null }`.
+Acquisition and release validate the owner ID, then reject with `NFC_UNSUPPORTED`;
+the hook therefore skips them on iOS.
+
+## Wait for an Android panel to finish
+
+If navigation or the next action should follow the complete panel animation,
+wait for both session idle and panel completion after the original result.
+`getPresentationState()` returns `{ platform, supported, activePresentationIds }`.
+Android reports all currently shown Sfiora panels in this process, including
+closing animations. `waitForPresentationEnd()` captures that set when the call
+reaches native code; it resolves with no value when those panels close. Later
+panels do not extend it, and an empty set resolves immediately. IDs are temporary;
+a headless read adds no panel. Calling before an operation does not wait for a
+panel that has yet to appear.
+
+The only option is `timeoutMilliseconds`: integer 1–60000, default 5000.
+Invalid options reject with `INVALID_OPTIONS`; the deadline rejects with
+`PRESENTATION_TIMEOUT`. A timeout does not close a panel or release the NFC session.
+On iOS, the query returns `supported: false` and an empty ID array; waiting rejects
+with `NFC_UNSUPPORTED` after validating options. That array does not report the
+system sheet's visibility.
+
+This helper delivers the read result immediately and reports each failure under
+its own operation name. Its boolean return concerns readiness only, not whether
+the read succeeded. The callbacks belong to your screen: preserve the read
+result or error and append wait errors separately. Ignore callbacks and readiness
+from a screen or operation that is no longer current.
+
+```ts
+// Uses the sfiora and Platform imports above.
+export async function readAndWaitForUi(
+  onResult: (tag: sfiora.NfcTagSnapshot) => void,
+  onError: (step: string, error: unknown) => void,
+): Promise<boolean> {
+  let ready = true;
+  const observe = async (step: string, task: Promise<void>) => {
+    try {
+      await task;
+    } catch (error) {
+      ready = false;
+      onError(step, error);
+    }
+  };
+
+  try {
+    onResult(await sfiora.startScan());
+  } catch (error) {
+    onError('startScan', error);
+  } finally {
+    const waits = [observe('waitForIdle', sfiora.waitForIdle())];
+    if (Platform.OS === 'android') {
+      waits.push(observe('waitForPresentationEnd',
+        sfiora.waitForPresentationEnd({ timeoutMilliseconds: 10000 })));
+    }
+    await Promise.all(waits);
+  }
+  return ready;
+}
+```
+
+Keep actions disabled throughout the helper. Only a still-current caller may
+use `true` to restore them; continue checking device availability and coordinating
+other screens. After `false`, refresh `isScanning()`, `isWriting()`, and Android
+`getPresentationState()` before enabling another action. A failed query is not
+an idle state. The same observation pattern applies to writes, initialization,
+and cancellation, without replacing the original operation result.
+
+Do not start a replacement operation or cancel a completed operation merely to
+hide its panel. Replacing an operation on the same controller or tearing down
+the host can close the panel immediately, interrupting its normal feedback.
+
 ## Options
 
 Common scan options:
@@ -333,6 +487,7 @@ must supply every required non-empty field. See the shipped
 | `SCAN_BUSY`, `WRITE_BUSY` | Let the current session finish; do not enqueue automatic retries |
 | `USER_CANCELLED` | End the local interaction normally |
 | `SESSION_CLOSE_TIMEOUT` | Keep actions disabled until a state refresh confirms the session has closed |
+| `PRESENTATION_TIMEOUT` | Preserve the result; refresh panel and session state before continuing |
 | `SCAN_TIMEOUT`, `WRITE_TIMEOUT`, `TAG_LOST` | Ask the user to retry with stable tag contact |
 | `UNSUPPORTED_TAG`, `TAG_READ_ONLY`, `NDEF_CAPACITY_EXCEEDED` | Use a suitable formatted, writable tag or smaller message |
 | `READ_FAILED` | Inspect the read error; do not interpret it as an empty tag |

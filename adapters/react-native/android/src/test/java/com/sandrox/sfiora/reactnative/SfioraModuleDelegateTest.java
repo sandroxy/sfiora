@@ -48,6 +48,7 @@ public class SfioraModuleDelegateTest {
     private final List<Reply> replies = new ArrayList<>();
 
     @Before public void setUp() {
+        MapTransport.lastValue = null;
         BlockedNdef.readEntered = new CountDownLatch(1);
         BlockedNdef.gate = new CountDownLatch(1);
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
@@ -127,6 +128,59 @@ public class SfioraModuleDelegateTest {
         }
     }
 
+    @Test public void foregroundRequestsAreMainThreadOwnedAndSurvivePauseUntilDestroy() throws Exception {
+        Reply acquire = reply();
+        fromNativeModules(() -> delegate.acquireForegroundDispatch("screen.a", acquire.promise));
+        assertEquals(0, acquire.calls);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(1, acquire.calls);
+        assertEquals("active", MapTransport.lastValue.get("state"));
+        delegate.acquireForegroundDispatch("screen.b", reply().promise);
+        delegate.releaseForegroundDispatch("screen.a", reply().promise);
+        assertNull(adapter.getDisabledActivity());
+        context.onHostPause();
+        delegate.getForegroundDispatchState(reply().promise);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("paused", MapTransport.lastValue.get("state"));
+        Activity replacement = Robolectric.buildActivity(Activity.class).setup().get();
+        context.onHostResume(replacement);
+        delegate.getForegroundDispatchState(reply().promise);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("active", MapTransport.lastValue.get("state"));
+        assertEquals(replacement, adapter.getEnabledActivity());
+        context.onHostDestroy();
+        delegate.getForegroundDispatchState(reply().promise);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("disabled", MapTransport.lastValue.get("state"));
+    }
+
+    @Test public void newEntryPointsValidateBeforeMutationAndRejectAfterInvalidation() throws Exception {
+        Reply invalidOwner = reply(), invalidWait = reply(), emptyWait = reply();
+        delegate.acquireForegroundDispatch("bad owner", invalidOwner.promise);
+        delegate.waitForPresentationEnd(JavaOnlyMap.of("timeoutMilliseconds", 0), invalidWait.promise);
+        delegate.waitForPresentationEnd(new JavaOnlyMap(), emptyWait.promise);
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals("INVALID_OPTIONS", invalidOwner.code);
+        assertEquals("INVALID_OPTIONS", invalidWait.code);
+        assertEquals(1, emptyWait.calls);
+        assertNull(emptyWait.code);
+        assertNull(adapter.getEnabledActivity());
+        Reply acquire = reply(), release = reply(), state = reply(), presentation = reply(), wait = reply();
+        fromNativeModules(() -> {
+            delegate.invalidate();
+            delegate.acquireForegroundDispatch("screen", acquire.promise);
+            delegate.releaseForegroundDispatch("screen", release.promise);
+            delegate.getForegroundDispatchState(state.promise);
+            delegate.getPresentationState(presentation.promise);
+            delegate.waitForPresentationEnd(new JavaOnlyMap(), wait.promise);
+        });
+        shadowOf(Looper.getMainLooper()).idle();
+        for (Reply value : new Reply[] {acquire, release, state, presentation, wait}) {
+            assertEquals(1, value.calls);
+            assertEquals("INTERNAL_ERROR", value.code);
+        }
+    }
+
     private Reply reply() { Reply value = new Reply(); replies.add(value); return value; }
     private static JavaOnlyMap options() { return JavaOnlyMap.of("android", Map.of("presentation", "none")); }
     private boolean isIdle() {
@@ -162,9 +216,13 @@ public class SfioraModuleDelegateTest {
     }
     @Implements(Arguments.class)
     public static class MapTransport {
+        static Map<String, Object> lastValue;
         // These tests observe Promise completion, codes and thread identity; JNI
         // map allocation belongs to the JS VM and is deliberately not exercised.
-        @Implementation protected static WritableNativeMap makeNativeMap(Map<String, Object> values) { return null; }
+        @Implementation protected static WritableNativeMap makeNativeMap(Map<String, Object> values) {
+            lastValue = values;
+            return null;
+        }
     }
     @Implements(Ndef.class)
     public static class BlockedNdef extends ShadowBasicTagTechnology {

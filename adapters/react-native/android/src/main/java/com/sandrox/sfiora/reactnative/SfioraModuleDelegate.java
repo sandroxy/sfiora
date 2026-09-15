@@ -18,6 +18,7 @@ import com.sandrox.sfiora.NfcInitializationResult;
 import com.sandrox.sfiora.NfcTagSnapshot;
 import com.sandrox.sfiora.NfcWriteResult;
 import com.sandrox.sfiora.bridge.SfioraBridgeOptions;
+import com.sandrox.sfiora.bridge.SfioraBridgeRuntime;
 import com.sandrox.sfiora.bridge.SfioraBridgeOptionsException;
 import com.sandrox.sfiora.bridge.SfioraBridgeWriteRequest;
 import com.sandrox.sfiora.bridge.SfioraBridgeWriteRequestException;
@@ -28,6 +29,7 @@ import java.lang.ref.WeakReference;
 
 final class SfioraModuleDelegate implements LifecycleEventListener {
     private final ReactApplicationContext reactContext;
+    private final SfioraBridgeRuntime auxiliaryRuntime = new SfioraBridgeRuntime();
 
     private NfcScanController scanController;
     private NfcWriteController writeController;
@@ -48,6 +50,48 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
             }
             NfcCapabilities capabilities = NfcCapabilities.from(reactContext);
             promise.resolve(Arguments.makeNativeMap(capabilities.toMap()));
+        });
+    }
+
+    void acquireForegroundDispatch(String ownerId, Promise promise) {
+        invokeAuxiliary("acquireForegroundDispatch", new Object[] {ownerId}, promise);
+    }
+
+    void releaseForegroundDispatch(String ownerId, Promise promise) {
+        invokeAuxiliary("releaseForegroundDispatch", new Object[] {ownerId}, promise);
+    }
+
+    void getForegroundDispatchState(Promise promise) {
+        invokeAuxiliary("getForegroundDispatchState", new Object[] {}, promise);
+    }
+
+    void getPresentationState(Promise promise) {
+        invokeAuxiliary("getPresentationState", new Object[] {}, promise);
+    }
+
+    void waitForPresentationEnd(ReadableMap options, Promise promise) {
+        invokeAuxiliary("waitForPresentationEnd", new Object[] {options == null ? null : options.toHashMap()}, promise);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void invokeAuxiliary(String method, Object[] args, Promise promise) {
+        UiThreadUtil.runOnUiThread(() -> {
+            if (invalidated) {
+                reject(promise, internalError("The NFC bridge has been invalidated"));
+                return;
+            }
+            Activity activity = availableActivity();
+            if (activity == null) auxiliaryRuntime.onPause();
+            else auxiliaryRuntime.onResume(activity);
+            auxiliaryRuntime.invoke(activity == null ? reactContext : activity, method, args, envelope -> {
+                java.util.Map<String, Object> value = (java.util.Map<String, Object>) envelope.get(
+                        Boolean.TRUE.equals(envelope.get("ok")) ? "data" : "error");
+                if (Boolean.TRUE.equals(envelope.get("ok"))) {
+                    promise.resolve("waitForPresentationEnd".equals(method) ? null : Arguments.makeNativeMap(value));
+                } else {
+                    promise.reject((String) value.get("code"), (String) value.get("message"), Arguments.makeNativeMap(value));
+                }
+            });
         });
     }
 
@@ -256,6 +300,7 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
                 return;
             }
             invalidated = true;
+            auxiliaryRuntime.close();
             reactContext.removeLifecycleEventListener(this);
             releaseControllers(true);
         });
@@ -263,12 +308,15 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
 
     @Override
     public void onHostResume() {
-        // Operations start only in direct response to a bridge call.
+        UiThreadUtil.runOnUiThread(() -> {
+            if (!invalidated) auxiliaryRuntime.onResume(reactContext.getCurrentActivity());
+        });
     }
 
     @Override
     public void onHostPause() {
         UiThreadUtil.runOnUiThread(() -> {
+            auxiliaryRuntime.onPause();
             releaseControllers(true);
         });
     }
@@ -276,6 +324,7 @@ final class SfioraModuleDelegate implements LifecycleEventListener {
     @Override
     public void onHostDestroy() {
         UiThreadUtil.runOnUiThread(() -> {
+            auxiliaryRuntime.close();
             releaseControllers(true);
         });
     }

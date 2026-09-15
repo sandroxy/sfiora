@@ -22,7 +22,7 @@ async function loadTransport(sourcePath, native) {
   }
 }
 
-test('UTS JS transport preserves all eight methods, arguments and cancellation values', async () => {
+test('UTS JS transport preserves all public native methods, arguments and cancellation values', async () => {
   const calls = [];
   const api = await loadTransport('uni_modules/Sandrox-Sfiora/js_sdk/index.js', (method, json, callback) => {
     calls.push([method, JSON.parse(json)]);
@@ -40,10 +40,17 @@ test('UTS JS transport preserves all eight methods, arguments and cancellation v
   assert.deepEqual(await api.initializeNdef(message, marker, options), {method: 'initializeNdef'});
   assert.equal(await api.isWriting(), true);
   assert.equal(await api.cancelWrite(), undefined);
+  assert.deepEqual(await api.acquireForegroundDispatch('screen:1'), {method: 'acquireForegroundDispatch'});
+  assert.deepEqual(await api.releaseForegroundDispatch('screen:1'), {method: 'releaseForegroundDispatch'});
+  assert.deepEqual(await api.getForegroundDispatchState(), {method: 'getForegroundDispatchState'});
+  assert.deepEqual(await api.getPresentationState(), {method: 'getPresentationState'});
+  assert.equal(await api.waitForPresentationEnd(options), undefined);
   assert.deepEqual(calls, [
     ['getCapabilities', []], ['startScan', [options]], ['isScanning', []], ['cancelScan', []],
     ['writeNdef', [message, options]], ['initializeNdef', [message, marker, options]],
     ['isWriting', []], ['cancelWrite', []],
+    ['acquireForegroundDispatch', ['screen:1']], ['releaseForegroundDispatch', ['screen:1']],
+    ['getForegroundDispatchState', []], ['getPresentationState', []], ['waitForPresentationEnd', [options]],
   ]);
 });
 

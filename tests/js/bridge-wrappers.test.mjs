@@ -188,6 +188,8 @@ test('React Native wrapper exposes the frozen methods and forwards options', asy
     Object.keys(wrapper).sort(),
     [
       'SfioraError',
+      'acquireForegroundDispatch', 'releaseForegroundDispatch', 'getForegroundDispatchState',
+      'getPresentationState', 'waitForPresentationEnd',
       'cancelScan',
       'cancelWrite',
       'getCapabilities',
@@ -397,6 +399,8 @@ test('UniApp wrapper converts callback envelopes to Promise values', async () =>
     Object.keys(wrapper).sort(),
     [
       'SfioraError',
+      'acquireForegroundDispatch', 'releaseForegroundDispatch', 'getForegroundDispatchState',
+      'getPresentationState', 'waitForPresentationEnd',
       'cancelScan',
       'cancelWrite',
       'getCapabilities',
@@ -578,5 +582,63 @@ for (const kind of ['React Native', 'UNI legacy']) {
       await assert.rejects(idle.waitForIdle(options), {code: 'INVALID_OPTIONS'});
     }
     await idle.waitForIdle();
+  });
+}
+
+
+for (const kind of ['React Native', 'UNI legacy', 'UNI UTS JS']) {
+  async function hostApi(invoke) {
+    if (kind === 'React Native') {
+      const native = Object.fromEntries(bridgeSchema['x-bridge-methods'].map(method => [method, (...args) => invoke(method, args)]));
+      return loadCommonJs('adapters/react-native/index.js', () => ({NativeModules: {Sfiora: native}}));
+    }
+    // Both UNI transports intentionally use the canonical createSfiora wrapper.
+    const source = await readFile(resolve(packageRoot, kind === 'UNI legacy' ? 'adapters/uniapp/bridge.js' : 'uni_modules/Sandrox-Sfiora/js_sdk/bridge.js'), 'utf8');
+    const {createSfiora} = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'));
+    return createSfiora((method, args, callback) => {
+      Promise.resolve().then(() => invoke(method, args)).then(
+        data => callback({ok: true, data}), error => callback({ok: false, error}));
+    });
+  }
+  test(`${kind} passes owned foreground requests and native presentation snapshots without session polling`, async () => {
+    const calls = [];
+    const state = {platform: 'android', revision: 1, state: 'active', error: null};
+    const panel = {platform: 'android', supported: true, activePresentationIds: ['panel-a']};
+    const api = await hostApi((method, args) => {
+      calls.push([method, args]);
+      return method === 'getPresentationState' ? panel : state;
+    });
+    assert.deepEqual(await api.acquireForegroundDispatch('screen:1'), state);
+    assert.deepEqual(await api.releaseForegroundDispatch('screen:1'), state);
+    assert.deepEqual(await api.getForegroundDispatchState(), state);
+    assert.deepEqual(await api.getPresentationState(), panel);
+    assert.equal(await api.waitForPresentationEnd(), undefined);
+    assert.equal(await api.waitForPresentationEnd({timeoutMilliseconds: 60000}), undefined);
+    assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+      ['acquireForegroundDispatch', ['screen:1']], ['releaseForegroundDispatch', ['screen:1']],
+      ['getForegroundDispatchState', []], ['getPresentationState', []],
+      ['waitForPresentationEnd', [{timeoutMilliseconds: 5000}]],
+      ['waitForPresentationEnd', [{timeoutMilliseconds: 60000}]],
+    ]);
+    assertSchemaValue(state, 'NfcForegroundDispatchState', 'foreground', bridgeSchema);
+    assertSchemaValue(panel, 'NfcPresentationState', 'presentation', bridgeSchema);
+  });
+  test(`${kind} validates owners and wait options before crossing the bridge`, async () => {
+    let calls = 0;
+    const api = await hostApi(() => { calls++; });
+    for (const owner of [null, 1, '', ' a', 'a\n', 'a\r', 'a\u2028', '中文', 'a/b', 'x'.repeat(129)]) {
+      await assert.rejects(api.acquireForegroundDispatch(owner), {code: 'INVALID_OPTIONS'});
+      await assert.rejects(api.releaseForegroundDispatch(owner), {code: 'INVALID_OPTIONS'});
+    }
+    for (const options of [null, [], 1, {extra: 1}, {timeoutMilliseconds: null}, {timeoutMilliseconds: true}, {timeoutMilliseconds: 0}, {timeoutMilliseconds: 60001}, {timeoutMilliseconds: 1.5}, {timeoutMilliseconds: NaN}]) {
+      await assert.rejects(api.waitForPresentationEnd(options), {code: 'INVALID_OPTIONS'});
+    }
+    assert.equal(calls, 0);
+  });
+  test(`${kind} preserves unsupported and timeout errors`, async () => {
+    for (const code of ['NFC_UNSUPPORTED', 'PRESENTATION_TIMEOUT']) {
+      const api = await hostApi(() => { throw {code, message: 'native detail', recoverable: false}; });
+      await assert.rejects(api.waitForPresentationEnd(), {code, message: 'native detail', recoverable: false});
+    }
   });
 }

@@ -72,6 +72,31 @@ public final class SfioraModule extends ReactContextBaseJavaModule {
         delegate.isWriting(promise);
     }
 
+    @ReactMethod
+    public void acquireForegroundDispatch(String ownerId, Promise promise) {
+        delegate.acquireForegroundDispatch(ownerId, promise);
+    }
+
+    @ReactMethod
+    public void releaseForegroundDispatch(String ownerId, Promise promise) {
+        delegate.releaseForegroundDispatch(ownerId, promise);
+    }
+
+    @ReactMethod
+    public void getForegroundDispatchState(Promise promise) {
+        delegate.getForegroundDispatchState(promise);
+    }
+
+    @ReactMethod
+    public void getPresentationState(Promise promise) {
+        delegate.getPresentationState(promise);
+    }
+
+    @ReactMethod
+    public void waitForPresentationEnd(ReadableMap options, Promise promise) {
+        delegate.waitForPresentationEnd(options, promise);
+    }
+
     @Override
     public void invalidate() {
         delegate.invalidate();

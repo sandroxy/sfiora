@@ -256,6 +256,11 @@ completion alone does not enable the next operation. There is no native
 `waitForIdle()` API; observe `.idle`. A close timeout does not release the OS
 session or justify an automatic retry.
 
+The system controls the NFC sheet's dismissal animation. An idle client means
+its session has ended; it does not provide the exact time the sheet disappears.
+Sfiora's foreground tag dispatcher and panel-completion observer are Android
+features. On iOS, continue using `NfcClient` state to coordinate operations.
+
 Inspect `NfcError.code`, `message`, `recoverable`, and optional `nativeError`.
 
 | Code | Handling |

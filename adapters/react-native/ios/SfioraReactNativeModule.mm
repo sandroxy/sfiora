@@ -39,6 +39,77 @@ RCT_EXPORT_METHOD(getCapabilities
     resolve([[SfioraBridgeCoordinator shared] getCapabilities]);
 }
 
+RCT_EXPORT_METHOD(acquireForegroundDispatch
+                  : (NSString *)ownerId
+                  resolve
+                  : (RCTPromiseResolveBlock)resolve
+                  reject
+                  : (RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *response = [[SfioraBridgeCoordinator shared] invokeHostCapability:@"acquireForegroundDispatch" argument:ownerId];
+    if ([response[@"ok"] boolValue]) {
+        resolve(response[@"data"]);
+    } else {
+        [self reject:reject withPayload:response[@"error"]];
+    }
+}
+
+RCT_EXPORT_METHOD(releaseForegroundDispatch
+                  : (NSString *)ownerId
+                  resolve
+                  : (RCTPromiseResolveBlock)resolve
+                  reject
+                  : (RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *response = [[SfioraBridgeCoordinator shared] invokeHostCapability:@"releaseForegroundDispatch" argument:ownerId];
+    if ([response[@"ok"] boolValue]) {
+        resolve(response[@"data"]);
+    } else {
+        [self reject:reject withPayload:response[@"error"]];
+    }
+}
+
+RCT_EXPORT_METHOD(getForegroundDispatchState
+                  : (RCTPromiseResolveBlock)resolve
+                  reject
+                  : (RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *response = [[SfioraBridgeCoordinator shared] invokeHostCapability:@"getForegroundDispatchState" argument:nil];
+    if ([response[@"ok"] boolValue]) {
+        resolve(response[@"data"]);
+    } else {
+        [self reject:reject withPayload:response[@"error"]];
+    }
+}
+
+RCT_EXPORT_METHOD(getPresentationState
+                  : (RCTPromiseResolveBlock)resolve
+                  reject
+                  : (RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *response = [[SfioraBridgeCoordinator shared] invokeHostCapability:@"getPresentationState" argument:nil];
+    if ([response[@"ok"] boolValue]) {
+        resolve(response[@"data"]);
+    } else {
+        [self reject:reject withPayload:response[@"error"]];
+    }
+}
+
+RCT_EXPORT_METHOD(waitForPresentationEnd
+                  : (NSDictionary *)options
+                  resolve
+                  : (RCTPromiseResolveBlock)resolve
+                  reject
+                  : (RCTPromiseRejectBlock)reject)
+{
+    NSDictionary *response = [[SfioraBridgeCoordinator shared] invokeHostCapability:@"waitForPresentationEnd" argument:options];
+    if ([response[@"ok"] boolValue]) {
+        resolve(response[@"data"]);
+    } else {
+        [self reject:reject withPayload:response[@"error"]];
+    }
+}
+
 RCT_EXPORT_METHOD(startScan
                   : (NSDictionary *)options
                   resolve

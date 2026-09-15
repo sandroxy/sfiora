@@ -157,7 +157,7 @@ public final class NfcScanController implements AutoCloseable {
         } catch (RuntimeException error) {
             activeDialog = null;
             try {
-                dialog.dismissWithoutCancellation();
+                dialog.dismissImmediatelyWithoutCancellation();
             } catch (RuntimeException ignored) {
                 // A broken or detached window has no remaining UI to release.
             }
@@ -185,7 +185,8 @@ public final class NfcScanController implements AutoCloseable {
         ManagedNfcOperationDialog dialog = activeDialog;
         activeDialog = null;
         if (dialog != null) {
-            dialog.dismissWithoutCancellation();
+            // Replacement and lifecycle teardown must finish before ownership is lost.
+            dialog.dismissImmediatelyWithoutCancellation();
         }
     }
 

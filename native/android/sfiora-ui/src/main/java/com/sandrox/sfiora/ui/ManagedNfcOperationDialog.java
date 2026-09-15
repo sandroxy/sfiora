@@ -59,6 +59,7 @@ final class ManagedNfcOperationDialog {
     private boolean successful;
     private boolean cancellationRequested;
     private boolean dismissing;
+    private String presentationId;
 
     ManagedNfcOperationDialog(
             Activity activity,
@@ -100,6 +101,8 @@ final class ManagedNfcOperationDialog {
             return false;
         });
         dialog.setOnDismissListener(ignored -> {
+            String dismissedPresentationId = presentationId;
+            presentationId = null;
             scanAnimationView.stopAnimation();
             panelView.animate().cancel();
             statusIconView.animate().cancel();
@@ -108,7 +111,11 @@ final class ManagedNfcOperationDialog {
                 dimAnimator = null;
             }
             mainHandler.removeCallbacksAndMessages(this);
-            dismissalAction.run();
+            try {
+                dismissalAction.run();
+            } finally {
+                NfcPresentationState.ended(dismissedPresentationId);
+            }
         });
     }
 
@@ -143,6 +150,7 @@ final class ManagedNfcOperationDialog {
 
         if (!dialog.isShowing()) {
             dialog.show();
+            presentationId = NfcPresentationState.began();
             configureWindow();
             playPresentationAnimation();
         }
@@ -226,6 +234,21 @@ final class ManagedNfcOperationDialog {
                     }
                 })
                 .start();
+    }
+
+    /** Lifecycle teardown must not depend on animation frames from a hidden window. */
+    void dismissImmediatelyWithoutCancellation() {
+        terminal = true;
+        dismissing = true;
+        mainHandler.removeCallbacksAndMessages(this);
+        scanAnimationView.stopAnimation();
+        panelView.animate().withEndAction(null).cancel();
+        statusIconView.animate().cancel();
+        if (dimAnimator != null) {
+            dimAnimator.cancel();
+            dimAnimator = null;
+        }
+        if (dialog.isShowing()) dialog.dismiss();
     }
 
     private void configureWindow() {

@@ -11,11 +11,13 @@ import com.sandrox.sfiora.NfcCapabilities;
 import com.sandrox.sfiora.NfcClient;
 import com.sandrox.sfiora.NfcError;
 import com.sandrox.sfiora.NfcErrorCode;
+import com.sandrox.sfiora.NfcForegroundDispatchController;
 import com.sandrox.sfiora.NfcInitializationResult;
 import com.sandrox.sfiora.NfcTagSnapshot;
 import com.sandrox.sfiora.NfcWriteResult;
 import com.sandrox.sfiora.ui.NfcScanController;
 import com.sandrox.sfiora.ui.NfcWriteController;
+import com.sandrox.sfiora.ui.NfcPresentationState;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -39,6 +41,8 @@ public final class SfioraBridgeRuntime {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private NfcScanController scanController;
     private NfcWriteController writeController;
+    private NfcForegroundDispatchController foregroundController;
+    private boolean hostPaused;
     private WeakReference<Activity> controllerActivityRef = new WeakReference<>(null);
 
     public static SfioraBridgeRuntime getShared() {
@@ -77,8 +81,10 @@ public final class SfioraBridgeRuntime {
             int count;
             switch (method) {
                 case "getCapabilities": case "cancelScan": case "isScanning":
-                case "cancelWrite": case "isWriting": count = 0; break;
-                case "startScan": count = 1; break;
+                case "cancelWrite": case "isWriting":
+                case "getForegroundDispatchState": case "getPresentationState": count = 0; break;
+                case "startScan": case "acquireForegroundDispatch":
+                case "releaseForegroundDispatch": case "waitForPresentationEnd": count = 1; break;
                 case "writeNdef": count = 2; break;
                 case "initializeNdef": count = 3; break;
                 default:
@@ -98,13 +104,77 @@ public final class SfioraBridgeRuntime {
                 case "initializeNdef": initializeNdef(context, args[0], args[1], args[2], callback); break;
                 case "cancelWrite": cancelWrite(callback); break;
                 case "isWriting": isWriting(callback); break;
+                case "getForegroundDispatchState":
+                case "acquireForegroundDispatch":
+                case "releaseForegroundDispatch": foreground(context, method, args, callback); break;
+                case "getPresentationState": invoke(callback, success(NfcPresentationState.getState())); break;
+                case "waitForPresentationEnd": waitForPresentationEnd(args[0], callback); break;
                 default: throw new AssertionError("Unreachable NFC method");
             }
         });
     }
 
     public void close() {
-        runOnMain(() -> releaseControllers(true));
+        runOnMain(() -> {
+            onPause();
+            if (foregroundController != null) {
+                foregroundController.close();
+                foregroundController = null;
+            }
+        });
+    }
+
+    public void onResume(Context context) {
+        runOnMain(() -> {
+            hostPaused = false;
+            Activity activity = availableActivity(context);
+            if (foregroundController != null && activity != null) foregroundController.onResume(activity);
+        });
+    }
+
+    public void onPause() {
+        runOnMain(() -> {
+            hostPaused = true;
+            if (foregroundController != null) foregroundController.onPause();
+            releaseControllers(true);
+        });
+    }
+
+    private void foreground(Context context, String method, Object[] args, ResultCallback callback) {
+        try {
+            if (!"getForegroundDispatchState".equals(method)) {
+                if (!(args[0] instanceof String)) throw new IllegalArgumentException("ownerId must be a string");
+                NfcForegroundDispatchController.validateOwner((String) args[0]);
+            }
+            if (context == null) {
+                invoke(callback, failure(hostUnavailable()));
+                return;
+            }
+            if (foregroundController == null) foregroundController = new NfcForegroundDispatchController(context);
+            Activity activity = availableActivity(context);
+            if (!hostPaused && activity != null) foregroundController.onResume(activity);
+            Map<String, Object> state;
+            if ("acquireForegroundDispatch".equals(method)) state = foregroundController.acquire((String) args[0]);
+            else if ("releaseForegroundDispatch".equals(method)) state = foregroundController.release((String) args[0]);
+            else state = foregroundController.getState();
+            invoke(callback, success(state));
+        } catch (IllegalArgumentException error) {
+            invoke(callback, failure(invalidOptions(error)));
+        }
+    }
+
+    private void waitForPresentationEnd(Object options, ResultCallback callback) {
+        final long timeout;
+        try {
+            timeout = SfioraBridgePresentationOptions.timeout(options);
+        } catch (IllegalArgumentException error) {
+            invoke(callback, failure(invalidOptions(error)));
+            return;
+        }
+        NfcPresentationState.waitForEnd(timeout, new NfcPresentationState.Completion() {
+            @Override public void onSuccess() { invoke(callback, success(Collections.emptyMap())); }
+            @Override public void onFailure(NfcError error) { invoke(callback, failure(error)); }
+        });
     }
 
     private void runOnMain(Runnable operation) {
