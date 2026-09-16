@@ -104,6 +104,14 @@ compile_uts app-ios classic
 compile_uts app-android x
 compile_uts app-ios x
 
+# Resolve the bridge's public lifecycle interfaces through its Gradle declaration,
+# using this archive's native inputs rather than another candidate in dist/.
+"${plugin_dir}/native/android/gradlew" -p "${plugin_dir}/adapters/android" --no-daemon \
+  -PsfioraCoreAar="${package_root}/utssdk/app-android/libs/sfiora.aar" \
+  -PsfioraUiAar="${package_root}/utssdk/app-android/libs/sfiora-ui.aar" \
+  :bridge-support:copyUtsCompileDependencies
+uts_compile_dependencies="${plugin_dir}/adapters/shared/android/build/uts-compile-dependencies"
+
 extract_aar_classes() {
   local output_dir="$1"
   shift
@@ -142,13 +150,14 @@ verify_android_output() {
       "${x_android_libs}/uts-runtime-release.aar"
   fi
 
-  local classpath_inputs=("${classic_android_libs}" "${extracted_libs}")
+  local classpath_inputs=("${classic_android_libs}" "${extracted_libs}" "${uts_compile_dependencies}")
   if [[ "${runtime}" == "x" ]]; then
     classpath_inputs=(
       "${classic_android_libs}/android_36.jar"
       "${classic_android_libs}/kotlin-stdlib-2.2.0.jar"
       "${classic_android_libs}/kotlinx-coroutines-core-jvm-1.6.4.jar"
       "${extracted_libs}"
+      "${uts_compile_dependencies}"
     )
   fi
 

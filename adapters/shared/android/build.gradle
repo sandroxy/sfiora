@@ -23,6 +23,10 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.includeAndroidResources = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -35,13 +39,35 @@ android {
     }
 }
 
+configurations {
+    utsCompileDependencies {
+        extendsFrom compileOnly
+        canBeConsumed = false
+    }
+}
+
 dependencies {
     compileOnly files(rootProject.ext.requireSfioraCoreAar())
     compileOnly files(rootProject.ext.requireSfioraUiAar())
+    compileOnly "androidx.lifecycle:lifecycle-common:2.1.0"
     testImplementation files(rootProject.ext.requireSfioraCoreAar())
     testImplementation files(rootProject.ext.requireSfioraUiAar())
     testImplementation "com.google.code.gson:gson:2.11.0"
     testImplementation "junit:junit:4.13.2"
+    testImplementation "androidx.lifecycle:lifecycle-runtime:2.1.0"
+    testImplementation "org.robolectric:robolectric:4.16.1"
+}
+
+// The standalone classic/X UTS compiler needs the same declared Java interfaces.
+tasks.register("copyUtsCompileDependencies", Sync) {
+    from configurations.utsCompileDependencies
+    include "*.jar"
+    into layout.buildDirectory.dir("uts-compile-dependencies")
+}
+
+// Robolectric references hidden Android annotations absent from android.jar.
+tasks.withType(JavaCompile).matching { it.name.contains("UnitTest") }.configureEach {
+    options.compilerArgs.add("-Xlint:-classfile")
 }
 
 tasks.withType(JavaCompile).configureEach {

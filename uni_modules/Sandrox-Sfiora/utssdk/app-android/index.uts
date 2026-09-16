@@ -4,7 +4,7 @@ import {
 } from '../interface.uts'
 import { invokeObject, invokeOwner, invokeBoolean, invokeVoid, waitForNativeIdle } from '../bridge.uts'
 export { SfioraError } from '../bridge.uts'
-import SfioraBridgeRuntime from 'com.sandrox.sfiora.bridge.SfioraBridgeRuntime'
+import SfioraBridgeLifecycle from 'com.sandrox.sfiora.bridge.SfioraBridgeLifecycle'
 import SfioraBridgeJsonCallback from 'com.sandrox.sfiora.bridge.SfioraBridgeJsonCallback'
 
 class RuntimeCallback implements SfioraBridgeJsonCallback {
@@ -17,21 +17,9 @@ class RuntimeCallback implements SfioraBridgeJsonCallback {
   }
 }
 
-let lifecycleRegistered = false
-function ensureLifecycle(): void {
-  if (lifecycleRegistered) return
-  lifecycleRegistered = true
-  UTSAndroid.onAppActivityResume(() => { SfioraBridgeRuntime.getShared().onResume(UTSAndroid.getUniActivity()) })
-  UTSAndroid.onAppActivityPause(() => { SfioraBridgeRuntime.getShared().onPause() })
-  UTSAndroid.onAppActivityDestroy(() => { SfioraBridgeRuntime.getShared().close() })
-}
-
 export const invokeSfioraNative: InvokeSfioraNative = function(method: string, argumentsJson: string, callback: SfioraNativeCallback): void {
-  ensureLifecycle()
-  const activity = UTSAndroid.getUniActivity()
   // Capability queries still work before an Activity exists.
-  const context = activity == null ? UTSAndroid.getAppContext() : activity
-  SfioraBridgeRuntime.getShared().invokeJson(context, method, argumentsJson, new RuntimeCallback(callback))
+  SfioraBridgeLifecycle.getShared().invokeJson(UTSAndroid.getUniActivity(), UTSAndroid.getAppContext(), method, argumentsJson, new RuntimeCallback(callback))
 }
 
 export const getCapabilities: GetCapabilities = function(): Promise<UTSJSONObject> {

@@ -8,6 +8,7 @@
 - 新增 Android 操作面板状态查询与结束等待，便于完整展示操作反馈后再跳转。等待只包含调用时已经显示的面板，后续面板不延长等待；超时返回 `PRESENTATION_TIMEOUT`，不取消读写或强制关闭面板。
 - RN 两种架构、经典 uni-app 的 legacy / UTS 和 uni-app x 均提供上述桥接接口。iOS 可查询平台能力，但不支持 Android 前台接管或系统面板关闭时间的等待。
 - 在同一 Android 控制器上开始下一次操作时立即关闭上一次的面板，避免旧面板在页面退出后仍等待动画结束。
+- 修复 Android UTS 宿主因语言或配置变化重建后，前台标签接管可能停留在暂停状态的问题；桥接按当前 Activity 的真实生命周期恢复和清理。
 
 接入与生命周期示例见 [Android 指南](https://github.com/sandroxy/sfiora/blob/main/native/android/README.md)、[RN 指南](https://github.com/sandroxy/sfiora/blob/main/adapters/react-native/README.md) 和 [UNI 指南](https://github.com/sandroxy/sfiora/blob/main/adapters/uniapp/README.md)。
 
