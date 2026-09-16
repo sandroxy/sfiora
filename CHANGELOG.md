@@ -9,6 +9,7 @@
 - RN 两种架构、经典 uni-app 的 legacy / UTS 和 uni-app x 均提供上述桥接接口。iOS 可查询平台能力，但不支持 Android 前台接管或系统面板关闭时间的等待。
 - 在同一 Android 控制器上开始下一次操作时立即关闭上一次的面板，避免旧面板在页面退出后仍等待动画结束。
 - 修复 Android UTS 宿主因语言或配置变化重建后，前台标签接管可能停留在暂停状态的问题；桥接按当前 Activity 的真实生命周期恢复和清理。
+- Android UTS 读写和初始化仅在宿主处于前台时启动；旧 Activity 的迟到调用不会重新接管绑定或取消新宿主的读写，后台状态查询和清理仍可执行。
 
 接入与生命周期示例见 [Android 指南](https://github.com/sandroxy/sfiora/blob/main/native/android/README.md)、[RN 指南](https://github.com/sandroxy/sfiora/blob/main/adapters/react-native/README.md) 和 [UNI 指南](https://github.com/sandroxy/sfiora/blob/main/adapters/uniapp/README.md)。
 
