@@ -340,32 +340,49 @@ export function attachNfcForeground(
 }
 ```
 
-在页面的 `<script setup lang="uts">` 中接入下面的生命周期。示例用字符串保存接管诊断，实际页面可按 `state['state'] as string` 显示状态；它们与原始读写结果分开：
+在页面的 `<script setup lang="uts">` 中接入下面的生命周期。首次进入等到 `onReady` 再申请，确保新页面的原生 Activity 已就绪；后续返回页面仍由 `onShow` 申请。示例用字符串保存接管诊断，实际页面可按 `state['state'] as string` 显示状态；它们与原始读写结果分开：
 
 ```uts
 import { ref } from 'vue'
-import { onShow, onHide, onUnload } from '@dcloudio/uni-app'
+import { onShow, onReady, onHide, onUnload } from '@dcloudio/uni-app'
 import { attachNfcForeground } from './nfc-foreground.uts'
 
 const foregroundJson = ref('')
 const foregroundError = ref('')
 let releaseForeground: (() => void) | null = null
+let pageReady = false
+let visible = false
 
 function leaveForeground() {
   const release = releaseForeground
   releaseForeground = null
   if (release != null) release()
 }
-onShow(() => {
-  leaveForeground()
+function enterForeground() {
+  if (!pageReady || !visible || releaseForeground != null) return
   foregroundError.value = ''
   releaseForeground = attachNfcForeground(
     (state: UTSJSONObject) => { foregroundJson.value = JSON.stringify(state) },
     (error: any) => { foregroundError.value = JSON.stringify(error) },
   )
+}
+onShow(() => {
+  visible = true
+  enterForeground()
 })
-onHide(leaveForeground)
-onUnload(leaveForeground)
+onReady(() => {
+  pageReady = true
+  enterForeground()
+})
+onHide(() => {
+  visible = false
+  leaveForeground()
+})
+onUnload(() => {
+  visible = false
+  pageReady = false
+  leaveForeground()
+})
 ```
 
 申请成功返回 `{ platform, revision, state, error }`，不代表 NFC 一定启用。`active` 表示已接管，`paused` 表示暂时没有前台 Activity，`nfcDisabled` 表示 NFC 开关关闭，`unavailable` 表示无 NFC 硬件，`disabled` 表示没有请求，`failed` 表示失败且 `error` 包含诊断。应用从后台或设置页返回时，可通过 `getForegroundDispatchState()` 刷新快照；快照不是持续监听，查询失败也应单独显示。
