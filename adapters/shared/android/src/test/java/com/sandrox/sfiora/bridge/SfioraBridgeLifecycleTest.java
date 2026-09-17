@@ -174,7 +174,7 @@ public class SfioraBridgeLifecycleTest {
         shadowOf(Looper.getMainLooper()).idle();
         assertTrue(call(host.get(), "isScanning", "[]").getBoolean("data"));
         host.pause();
-        shadowOf(Looper.getMainLooper()).idle();
+        awaitResult(result);
         assertFalse(call(host.get(), "isScanning", "[]").getBoolean("data"));
         assertEquals("USER_CANCELLED", new JSONObject(result.get()).getJSONObject("error").getString("code"));
         assertEquals(0, call(host.get(), "getPresentationState", "[]").getJSONObject("data")
@@ -336,7 +336,7 @@ public class SfioraBridgeLifecycleTest {
         assertEquals(0, host.get().lifecycle.getObserverCount());
         assertEquals(1, replacement.get().lifecycle.getObserverCount());
         replacement.pause();
-        shadowOf(Looper.getMainLooper()).idle();
+        awaitResult(operation);
         assertEquals("USER_CANCELLED", new JSONObject(operation.get()).getJSONObject("error").getString("code"));
         replacement.resume();
     }
@@ -362,6 +362,8 @@ public class SfioraBridgeLifecycleTest {
     }
 
     private static void awaitResult(AtomicReference<String> result) throws InterruptedException {
+        // NFC cleanup runs on its own executor before posting the result to main.
+        // Draining the main looper once does not wait for that executor to finish.
         long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
         while (result.get() == null && System.nanoTime() < deadline) {
             shadowOf(Looper.getMainLooper()).idle();
